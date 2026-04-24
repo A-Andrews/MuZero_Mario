@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Outputs
+outputs/
+logs/
+wandb/
+wandb_runs/
+multirun/
+
+# Hydra
+.hydra/
+
+# Checkpoints and videos
+*.pt
+*.mp4
+*.ckpt
+*.log
+
+# ROM / state files (symlinked, never commit)
+mario.stimuli/
+
+# OS
+.DS_Store
