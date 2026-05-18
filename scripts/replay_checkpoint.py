@@ -73,10 +73,11 @@ def main():
                 frame_skip=frame_skip,
                 pad_to=pad_to,
                 max_steps=args.max_steps,
+                bk2_path=out_dir / f"{level}.bk2",
             )
             path = out_dir / f"{level}.mp4"
             save_video(path, frames, fps=video_fps)
-            print(f"{level}: return={ret:.2f}  steps={n}  -> {path}")
+            print(f"{level}: return={ret:.2f}  steps={n}  -> {path} (+ {level}.bk2)")
         except Exception as e:
             print(f"{level}: FAILED — {e}")
 

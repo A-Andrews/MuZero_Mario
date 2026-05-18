@@ -28,18 +28,32 @@ def compute_n_step_returns(rewards, root_values, n_step, discount, terminal=True
     if T == 0:
         return np.zeros(0, dtype=np.float32)
 
-    padded_r = np.zeros(T + n_step, dtype=np.float32)
-    padded_r[:T] = rewards
-    padded_v = np.empty(T + n_step, dtype=np.float32)
-    padded_v[:T] = root_values
-    padded_v[T:] = 0.0 if terminal else float(root_values[-1])
-
-    discounts = np.power(discount, np.arange(n_step, dtype=np.float64)).astype(np.float32)
-    # Rolling (T, n_step) window of rewards[t..t+n_step-1]; sliding_window_view
-    # is a zero-copy view so the (T, n_step) matmul is the only real work.
-    windows = np.lib.stride_tricks.sliding_window_view(padded_r, window_shape=n_step)[:T]
-    out = windows @ discounts
-    out += (discount ** n_step) * padded_v[n_step:T + n_step]
+    out = np.zeros(T, dtype=np.float32)
+    for t in range(T):
+        if terminal:
+            # True terminal: rewards past T-1 are 0 and the bootstrap value is
+            # 0 once the n-step window runs off the end of the episode.
+            horizon = min(n_step, T - t)
+            acc = 0.0
+            g = 1.0
+            for i in range(horizon):
+                acc += g * rewards[t + i]
+                g *= discount
+            if t + n_step < T:
+                acc += (discount ** n_step) * root_values[t + n_step]
+            out[t] = acc
+        else:
+            # Truncated mid-episode: bootstrap off the last *observed* root
+            # value at its correct discount horizon, rather than zero-padding
+            # the reward gap and bootstrapping a far-future value.
+            k = min(n_step, T - 1 - t)
+            acc = 0.0
+            g = 1.0
+            for i in range(k):
+                acc += g * rewards[t + i]
+                g *= discount
+            acc += (discount ** k) * root_values[t + k]
+            out[t] = acc
     return out.astype(np.float32)
 
 

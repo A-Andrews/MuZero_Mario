@@ -17,6 +17,10 @@ training:
   min_replay_transitions: 2_000
   weight_broadcast_every: 100
   save_every_train_steps: 5_000
+  # A replay rollout is a full greedy-MCTS episode on the GPU and contends
+  # with the learner, so it runs on its own (sparser) cadence rather than
+  # every checkpoint. <=0 falls back to save_every_train_steps.
+  replay_every_train_steps: 25_000
   log_every_train_steps: 100
 
 muzero:
@@ -60,12 +64,22 @@ selfplay:
 worker:
   torch_threads: 1
 
+inference_server:
+  max_batch: 48
+  max_wait_ms: 1.0
+  use_amp: true
+
 learner_torch_threads: 1
 
 wandb:
   project: muzero-mario
   entity: null
   mode: online
+  name: null          # optional run name, e.g. "tierA-bf16"
+  tags: null          # optional list of tags, e.g. ["speedup","tierA"]
+  notes: null         # optional free-text notes
+  group: null         # optional run group (for A/B comparisons)
+  job_type: null      # optional job_type, e.g. "baseline" / "experiment"
   log_videos_every_ckpt: true
   watch_model: false
 

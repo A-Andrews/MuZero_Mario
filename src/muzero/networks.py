@@ -45,11 +45,11 @@ def _min_max_normalise(h: torch.Tensor) -> torch.Tensor:
     Min/max are taken over all C*H*W activations of each sample, matching
     MuZero-Atari's hidden-state normalisation.
     """
-    flat = h.view(h.size(0), -1)
+    flat = h.reshape(h.size(0), -1)
     _min = flat.min(dim=1, keepdim=True)[0]
     _max = flat.max(dim=1, keepdim=True)[0]
     norm = (flat - _min) / (_max - _min + 1e-8)
-    return norm.view_as(h)
+    return norm.reshape(h.shape)
 
 
 class RepresentationNet(nn.Module):

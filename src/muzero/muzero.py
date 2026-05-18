@@ -7,10 +7,11 @@ trajectories from the coordinator's queue and trains.
 """
 from __future__ import annotations
 
+import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
@@ -28,6 +29,88 @@ from src.muzero.networks import MuZeroNet
 from src.muzero.transforms import cross_entropy_on_support, support_to_scalar
 from src.selfplay.coordinator import SelfPlayCoordinator
 from src.selfplay.replay_eval import run_replay_rollout
+
+
+class _NullCtx:
+    def __enter__(self):
+        return None
+    def __exit__(self, *a):
+        return False
+
+
+class _BatchPrefetcher:
+    """One-deep background batch sampler. Overlaps CPU buffer.sample with GPU step."""
+
+    def __init__(self, buffer, batch_size, pin):
+        self._buffer = buffer
+        self._batch_size = batch_size
+        self._pin = pin
+        self._cv = threading.Condition()
+        self._ready = None  # batch_dict_with_pinned_tensors
+        self._error: Optional[BaseException] = None
+        self._request_step = None
+        self._stop = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def request(self, train_step: int):
+        with self._cv:
+            self._request_step = train_step
+            self._cv.notify_all()
+
+    def get(self):
+        with self._cv:
+            while self._ready is None and self._error is None and not self._stop:
+                self._cv.wait()
+            if self._error is not None:
+                err = self._error
+                self._error = None
+                raise err
+            batch = self._ready
+            self._ready = None
+            self._cv.notify_all()
+            return batch
+
+    def stop(self):
+        with self._cv:
+            self._stop = True
+            self._cv.notify_all()
+
+    def _run(self):
+        while True:
+            with self._cv:
+                while not self._stop and (
+                    self._request_step is None
+                    or self._ready is not None
+                    or self._error is not None
+                ):
+                    self._cv.wait()
+                if self._stop:
+                    return
+                step = self._request_step
+                self._request_step = None
+            try:
+                batch_np = self._buffer.sample(self._batch_size, step)
+                tensors = {
+                    "obs": torch.from_numpy(batch_np["obs"]),
+                    "actions": torch.from_numpy(batch_np["actions"]),
+                    "rewards": torch.from_numpy(batch_np["rewards"]),
+                    "policies": torch.from_numpy(batch_np["policies"]),
+                    "returns": torch.from_numpy(batch_np["returns"]),
+                    "is_weights": torch.from_numpy(batch_np["is_weights"]),
+                }
+                if self._pin:
+                    for k in tensors:
+                        tensors[k] = tensors[k].pin_memory()
+                tensors["sample_locations"] = batch_np["sample_locations"]
+            except BaseException as e:
+                with self._cv:
+                    self._error = e
+                    self._cv.notify_all()
+                continue
+            with self._cv:
+                self._ready = tensors
+                self._cv.notify_all()
 
 
 class MuzeroLearner:
@@ -62,6 +145,9 @@ class MuzeroLearner:
         self.grad_clip = float(tr["grad_clip"])
         self.weight_broadcast_every = int(tr["weight_broadcast_every"])
         self.save_every = int(tr["save_every_train_steps"])
+        self.replay_every = self._resolve_replay_every(
+            tr.get("replay_every_train_steps", 0), self.save_every
+        )
         self.log_every = int(tr["log_every_train_steps"])
         self.total_env_steps = int(tr["total_env_steps"])
 
@@ -74,12 +160,29 @@ class MuzeroLearner:
         self.value_support = (float(m["value_support_min"]), float(m["value_support_max"]), int(m["value_support_size"]))
         self.reward_support = (float(m["reward_support_min"]), float(m["reward_support_max"]), int(m["reward_support_size"]))
 
+        self.use_amp = (device.type == "cuda")
+        self.amp_dtype = torch.bfloat16
+        self._prefetcher = _BatchPrefetcher(
+            buffer=self.buffer,
+            batch_size=self.batch_size,
+            pin=(device.type == "cuda"),
+        )
+
         self.ckpt_dir = self.out_dir / "checkpoints"
         self.video_dir = self.out_dir / "videos"
         self.ckpt_dir.mkdir(parents=True, exist_ok=True)
         self.video_dir.mkdir(parents=True, exist_ok=True)
 
         self._recent_losses = deque(maxlen=100)
+
+        # Prefetch is primed once on the first post-warmup step; every
+        # _train_step then requests the next batch itself.
+        self._prefetch_primed = False
+        # Replay runs on a private network copy in a background thread so it
+        # never blocks the learner and never toggles the training net's
+        # BatchNorm into eval().
+        self._replay_net: Optional[MuZeroNet] = None
+        self._replay_thread: Optional[threading.Thread] = None
 
     # -------------------------------------------------------------------------
 
@@ -123,6 +226,12 @@ class MuzeroLearner:
                 time.sleep(0.05)
                 continue
 
+            # Prime the prefetch exactly once (first post-warmup step). After
+            # that, each _train_step eagerly requests the following batch, so
+            # re-requesting here would just trigger a redundant buffer.sample.
+            if not self._prefetch_primed:
+                self._prefetcher.request(self.training_step)
+                self._prefetch_primed = True
             loss_scalars = self._train_step()
             self.training_step += 1
             self._recent_losses.append(loss_scalars)
@@ -141,64 +250,91 @@ class MuzeroLearner:
                 last_traj_count = traj_count
 
             if self.save_every > 0 and self.training_step % self.save_every == 0:
-                self._checkpoint_and_replay()
+                self._save_checkpoint()
+
+            if self.replay_every > 0 and self.training_step % self.replay_every == 0:
+                self._maybe_launch_replay()
 
             if self.scheduler is not None:
                 self.scheduler.step()
 
+    def close(self):
+        try:
+            self._prefetcher.stop()
+        except Exception:
+            pass
+        if self._replay_thread is not None and self._replay_thread.is_alive():
+            try:
+                self._replay_thread.join(timeout=30)
+            except Exception:
+                pass
+
     # -- one gradient step ----------------------------------------------------
 
     def _train_step(self) -> Dict[str, float]:
-        batch = self.buffer.sample(self.batch_size, self.training_step)
-        obs = torch.from_numpy(batch["obs"]).to(self.device)                        # (B, C, H, W)
-        actions = torch.from_numpy(batch["actions"]).to(self.device)                # (B, K)
-        rewards = torch.from_numpy(batch["rewards"]).to(self.device)                # (B, K)
-        policies = torch.from_numpy(batch["policies"]).to(self.device)              # (B, K+1, A)
-        returns = torch.from_numpy(batch["returns"]).to(self.device)                # (B, K+1)
-        is_w = torch.from_numpy(batch["is_weights"]).to(self.device)                # (B,)
+        batch = self._prefetcher.get()
+        # Immediately queue the next batch so CPU sampling overlaps GPU compute.
+        self._prefetcher.request(self.training_step + 1)
+        pin = (self.device.type == "cuda")
+        obs = batch["obs"].to(self.device, non_blocking=pin)
+        if self.use_amp:
+            obs = obs.contiguous(memory_format=torch.channels_last)
+        actions = batch["actions"].to(self.device, non_blocking=pin)
+        rewards = batch["rewards"].to(self.device, non_blocking=pin)
+        policies = batch["policies"].to(self.device, non_blocking=pin)
+        returns = batch["returns"].to(self.device, non_blocking=pin)
+        is_w = batch["is_weights"].to(self.device, non_blocking=pin)
+        sample_locations = batch["sample_locations"]
 
-        # Initial step: representation + prediction
-        h, policy_logits, value_logits = self.net.initial_step(obs)
-        v_pred_initial = support_to_scalar(value_logits, *self.value_support).detach()
-
-        # Step 0 contributes value + policy at full weight (no reward at initial step).
-        value_loss_init = cross_entropy_on_support(
-            value_logits, returns[:, 0], *self.value_support
+        amp_ctx = (
+            torch.autocast(device_type="cuda", dtype=self.amp_dtype)
+            if self.use_amp
+            else _NullCtx()
         )
-        policy_loss_init = -(policies[:, 0] * F.log_softmax(policy_logits, dim=-1)).sum(dim=-1)
 
-        # Recurrent steps are scaled by 1/K so total loss scale is independent
-        # of the unroll length (DeepMind MuZero, Appendix B).
-        value_loss_recur = torch.zeros_like(value_loss_init)
-        reward_loss_recur = torch.zeros_like(value_loss_init)
-        policy_loss_recur = torch.zeros_like(value_loss_init)
+        with amp_ctx:
+            # Initial step: representation + prediction
+            h, policy_logits, value_logits = self.net.initial_step(obs)
+            # support_to_scalar runs in fp32 for a stable priority signal.
+            v_pred_initial = support_to_scalar(
+                value_logits.float(), *self.value_support
+            ).detach()
 
-        for k in range(self.K):
-            h, reward_logits, policy_logits, value_logits = self.net.recurrent_step(h, actions[:, k])
-            # Gradient scaling 0.5x on the dynamics hidden output
-            h.register_hook(lambda grad: grad * 0.5)
-
-            reward_loss_recur = reward_loss_recur + cross_entropy_on_support(
-                reward_logits, rewards[:, k], *self.reward_support
+            value_loss_init = cross_entropy_on_support(
+                value_logits.float(), returns[:, 0], *self.value_support
             )
-            value_loss_recur = value_loss_recur + cross_entropy_on_support(
-                value_logits, returns[:, k + 1], *self.value_support
+            policy_loss_init = -(policies[:, 0] * F.log_softmax(policy_logits.float(), dim=-1)).sum(dim=-1)
+
+            value_loss_recur = torch.zeros_like(value_loss_init)
+            reward_loss_recur = torch.zeros_like(value_loss_init)
+            policy_loss_recur = torch.zeros_like(value_loss_init)
+
+            for k in range(self.K):
+                h, reward_logits, policy_logits, value_logits = self.net.recurrent_step(h, actions[:, k])
+                # Gradient scaling 0.5x on the dynamics hidden output
+                h.register_hook(lambda grad: grad * 0.5)
+
+                reward_loss_recur = reward_loss_recur + cross_entropy_on_support(
+                    reward_logits.float(), rewards[:, k], *self.reward_support
+                )
+                value_loss_recur = value_loss_recur + cross_entropy_on_support(
+                    value_logits.float(), returns[:, k + 1], *self.value_support
+                )
+                policy_loss_recur = policy_loss_recur + -(
+                    policies[:, k + 1] * F.log_softmax(policy_logits.float(), dim=-1)
+                ).sum(dim=-1)
+
+            recur_scale = 1.0 / max(1, self.K)
+            value_loss_total = value_loss_init + recur_scale * value_loss_recur
+            reward_loss_total = recur_scale * reward_loss_recur
+            policy_loss_total = policy_loss_init + recur_scale * policy_loss_recur
+
+            loss_per_sample = (
+                self.loss_w_v * value_loss_total
+                + self.loss_w_r * reward_loss_total
+                + self.loss_w_p * policy_loss_total
             )
-            policy_loss_recur = policy_loss_recur + -(
-                policies[:, k + 1] * F.log_softmax(policy_logits, dim=-1)
-            ).sum(dim=-1)
-
-        recur_scale = 1.0 / max(1, self.K)
-        value_loss_total = value_loss_init + recur_scale * value_loss_recur
-        reward_loss_total = recur_scale * reward_loss_recur
-        policy_loss_total = policy_loss_init + recur_scale * policy_loss_recur
-
-        loss_per_sample = (
-            self.loss_w_v * value_loss_total
-            + self.loss_w_r * reward_loss_total
-            + self.loss_w_p * policy_loss_total
-        )
-        loss = (loss_per_sample * is_w).mean()
+            loss = (loss_per_sample * is_w).mean()
 
         self.opt.zero_grad(set_to_none=True)
         loss.backward()
@@ -209,7 +345,7 @@ class MuzeroLearner:
         with torch.no_grad():
             target_return_0 = returns[:, 0]
             new_priorities = (v_pred_initial - target_return_0).abs().cpu().numpy()
-        self.buffer.update_priorities(batch["sample_locations"], new_priorities)
+        self.buffer.update_priorities(sample_locations, new_priorities)
 
         return {
             "value_loss": float(value_loss_total.mean().item()),
@@ -237,7 +373,21 @@ class MuzeroLearner:
         metrics["train/trajectories_per_sec"] = float(traj_rate)
         self.wandb.log(metrics, step=self.training_step)
 
-    def _checkpoint_and_replay(self):
+    @staticmethod
+    def _resolve_replay_every(replay_every_cfg, save_every: int) -> int:
+        """Resolve the replay cadence.
+
+        A replay rollout is a full greedy-MCTS episode on the GPU and contends
+        with the learner, so it runs on its own (typically sparser) cadence
+        rather than every checkpoint. A non-positive / unset config value falls
+        back to ``save_every`` so existing configs keep their behavior.
+        """
+        replay_every = int(replay_every_cfg)
+        if replay_every <= 0:
+            return save_every
+        return replay_every
+
+    def _save_checkpoint(self):
         ckpt_path = self.ckpt_dir / f"step_{self.training_step}.pt"
         save_checkpoint(
             path=ckpt_path,
@@ -257,54 +407,117 @@ class MuzeroLearner:
             pass
         rotate_checkpoints(self.ckpt_dir, keep=10)
 
+    def _maybe_launch_replay(self):
         if not self.cfg["wandb"].get("log_videos_every_ckpt", True):
+            return
+
+        if self._replay_thread is not None and self._replay_thread.is_alive():
+            print(
+                f"[replay] previous replay still running; "
+                f"skipping replay at step {self.training_step}"
+            )
             return
 
         video_step_dir = self.video_dir / f"step_{self.training_step}"
         video_step_dir.mkdir(parents=True, exist_ok=True)
 
-        env_cfg = self.cfg["env"]
-        model_cfg = self.cfg["model"]
-        mcts_cfg = self.cfg["mcts"]
-        pad_to = int(model_cfg["input_spatial"]) if env_cfg["pad_to_input_spatial"] else None
+        # Snapshot weights to CPU on the training thread so the background
+        # replay sees a consistent set of weights and never races the
+        # optimizer. Replay runs on a separate network instance, so the
+        # training net is never switched to eval().
+        cpu_sd = {
+            k: v.detach().to("cpu", copy=True)
+            for k, v in self.net.state_dict().items()
+        }
+        self._replay_thread = threading.Thread(
+            target=self._run_replay,
+            args=(cpu_sd, video_step_dir),
+            name=f"replay-step-{self.training_step}",
+            daemon=True,
+        )
+        self._replay_thread.start()
 
-        frame_skip = int(env_cfg["frame_skip"])
-        # We save one RGB frame per env.step(); env.step internally advances
-        # `frame_skip` emulator frames at native 60 Hz, so playback fps is
-        # 60 / frame_skip.
-        video_fps = max(1, 60 // frame_skip)
-        for level in env_cfg["levels"]:
-            try:
-                frames, total_return, n_steps = run_replay_rollout(
-                    level=level,
-                    int_path=env_cfg["int_path"],
-                    network=self.net,
-                    device=self.device,
-                    num_simulations=int(mcts_cfg["num_simulations"]),
-                    discount=float(self.cfg["muzero"]["discount"]),
-                    pb_c_base=float(mcts_cfg["pb_c_base"]),
-                    pb_c_init=float(mcts_cfg["pb_c_init"]),
-                    n_frame_stack=int(env_cfg["n_frame_stack"]),
-                    frame_skip=frame_skip,
-                    pad_to=pad_to,
-                    max_steps=int(self.cfg["selfplay"]["max_trajectory_length"]),
-                    seed=int(self.cfg["seed"]) + 777,
-                )
-                mp4_path = video_step_dir / f"{level}.mp4"
-                save_video(mp4_path, frames, fps=video_fps)
-                self.wandb.log_video(
-                    key=f"replay/{level}",
-                    path=mp4_path,
-                    fps=video_fps,
-                    step=self.training_step,
-                    extra={
-                        f"replay/{level}_return": total_return,
-                        f"replay/{level}_length": n_steps,
-                    },
-                )
-            except Exception as e:
-                self.wandb.log(
-                    {f"replay/{level}_error": 1.0}, step=self.training_step
-                )
-                print(f"[replay] {level} failed: {e}")
-        self.net.train()
+    def _build_replay_net(self) -> MuZeroNet:
+        m = self.cfg["model"]
+        net = MuZeroNet(
+            input_channels=m["input_channels"],
+            input_spatial=m["input_spatial"],
+            hidden_channels=m["hidden_channels"],
+            hidden_spatial=m["hidden_spatial"],
+            num_actions=m["num_actions"],
+            value_support=tuple(m["value_support"]),
+            reward_support=tuple(m["reward_support"]),
+            rep_blocks=tuple(m["rep_blocks"]),
+            dyn_blocks=m["dyn_blocks"],
+            pred_blocks=m["pred_blocks"],
+        ).to(self.device)
+        if self.device.type == "cuda":
+            net = net.to(memory_format=torch.channels_last)
+        return net
+
+    def _run_replay(self, cpu_sd, video_step_dir):
+        """Background replay: greedy MCTS rollouts on a private network copy.
+
+        Runs off the training thread so the learner keeps stepping, and uses a
+        dedicated `self._replay_net` (never the training net) so BatchNorm is
+        never toggled into eval() under the learner.
+        """
+        try:
+            if self._replay_net is None:
+                self._replay_net = self._build_replay_net()
+            self._replay_net.load_state_dict(
+                {k: v.to(self.device) for k, v in cpu_sd.items()}, strict=True
+            )
+            self._replay_net.eval()
+
+            env_cfg = self.cfg["env"]
+            model_cfg = self.cfg["model"]
+            mcts_cfg = self.cfg["mcts"]
+            pad_to = (
+                int(model_cfg["input_spatial"])
+                if env_cfg["pad_to_input_spatial"]
+                else None
+            )
+            frame_skip = int(env_cfg["frame_skip"])
+            # One RGB frame per env.step(); env.step advances `frame_skip`
+            # emulator frames at 60 Hz, so playback fps is 60 / frame_skip.
+            video_fps = max(1, 60 // frame_skip)
+            for level in env_cfg["levels"]:
+                try:
+                    frames, total_return, n_steps = run_replay_rollout(
+                        level=level,
+                        int_path=env_cfg["int_path"],
+                        network=self._replay_net,
+                        device=self.device,
+                        num_simulations=int(mcts_cfg["num_simulations"]),
+                        discount=float(self.cfg["muzero"]["discount"]),
+                        pb_c_base=float(mcts_cfg["pb_c_base"]),
+                        pb_c_init=float(mcts_cfg["pb_c_init"]),
+                        n_frame_stack=int(env_cfg["n_frame_stack"]),
+                        frame_skip=frame_skip,
+                        pad_to=pad_to,
+                        max_steps=int(self.cfg["selfplay"]["max_trajectory_length"]),
+                        seed=int(self.cfg["seed"]) + 777,
+                        bk2_path=video_step_dir / f"{level}.bk2",
+                    )
+                    mp4_path = video_step_dir / f"{level}.mp4"
+                    save_video(mp4_path, frames, fps=video_fps)
+                    # step read live to keep wandb's step monotonic; the
+                    # training thread has advanced since the snapshot.
+                    self.wandb.log_video(
+                        key=f"replay/{level}",
+                        path=mp4_path,
+                        fps=video_fps,
+                        step=self.training_step,
+                        extra={
+                            f"replay/{level}_return": total_return,
+                            f"replay/{level}_length": n_steps,
+                        },
+                    )
+                except Exception as e:
+                    self.wandb.log(
+                        {f"replay/{level}_error": 1.0}, step=self.training_step
+                    )
+                    print(f"[replay] {level} failed: {e}")
+        except Exception as e:
+            print(f"[replay] dispatch failed: {e}")

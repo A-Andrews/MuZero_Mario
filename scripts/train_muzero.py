@@ -1,7 +1,6 @@
 """MuZero-Mario training entrypoint."""
 from __future__ import annotations
 
-import os
 import random
 import sys
 from pathlib import Path
@@ -10,6 +9,7 @@ import hydra
 import numpy as np
 import torch
 import torch.multiprocessing as mp
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
 # Ensure `src` is importable no matter where Hydra runs us from.
@@ -30,6 +30,13 @@ def _seed_everything(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def _enable_fast_math():
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
 
 
 def _pick_device(spec: str) -> torch.device:
@@ -56,8 +63,11 @@ def _build_network(model_cfg) -> MuZeroNet:
 
 @hydra.main(config_path="../conf", config_name="muzero", version_base=None)
 def main(cfg: DictConfig):
-    # Hydra changes the cwd to the run dir; anchor int_path to it early.
-    out_dir = Path(os.getcwd())
+    # With version_base=None, Hydra ≥1.2 does NOT chdir into the run dir, so
+    # os.getcwd() is the repo root. Pull the run dir directly from HydraConfig
+    # so checkpoints + videos land next to the Hydra log under outputs/.
+    out_dir = Path(HydraConfig.get().runtime.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     print(f"[train] run dir: {out_dir}")
 
     # Limit CPU thread pool so single-threaded PyTorch ops don't spin up
@@ -68,6 +78,8 @@ def main(cfg: DictConfig):
 
     _seed_everything(int(cfg.seed))
     device = _pick_device(str(cfg.device))
+    if device.type == "cuda":
+        _enable_fast_math()
     print(f"[train] device: {device}")
 
     # Resolve int_path relative to the original repo root (Hydra cwd-jumped us).
@@ -77,17 +89,24 @@ def main(cfg: DictConfig):
     cfg_dict["env"] = env_cfg  # ensure resolved int_path propagates
 
     # --- wandb ----------------------------------------------------------------
+    w = cfg_dict["wandb"]
     wandb_logger = WandbLogger(
-        project=cfg_dict["wandb"]["project"],
-        entity=cfg_dict["wandb"].get("entity"),
-        name=None,
+        project=w["project"],
+        entity=w.get("entity"),
+        name=w.get("name"),
         config=cfg_dict,
-        mode=cfg_dict["wandb"].get("mode", "online"),
+        mode=w.get("mode", "online"),
         dir=str(out_dir),
+        tags=w.get("tags"),
+        notes=w.get("notes"),
+        group=w.get("group"),
+        job_type=w.get("job_type"),
     )
 
     # --- networks + optimizer -------------------------------------------------
     online_net = _build_network(cfg.model).to(device)
+    if device.type == "cuda":
+        online_net = online_net.to(memory_format=torch.channels_last)
 
     optimizer = torch.optim.Adam(
         online_net.parameters(),
@@ -117,6 +136,8 @@ def main(cfg: DictConfig):
         cfg=cfg_dict,
         num_workers=int(cfg.selfplay.num_workers),
         levels=list(cfg.env.levels),
+        device=device,
+        initial_state_dict=online_net.state_dict(),
     )
 
     # --- trainer --------------------------------------------------------------
@@ -146,6 +167,7 @@ def main(cfg: DictConfig):
     try:
         trainer.training_loop(start_step=start_step)
     finally:
+        trainer.close()
         coordinator.stop()
         wandb_logger.finish()
 

@@ -25,34 +25,20 @@ import torch
 from src.env.env import create_train_env
 from src.muzero.buffer import Trajectory
 from src.muzero.mcts import MCTS
-from src.muzero.networks import MuZeroNet
 from src.muzero.returns import compute_n_step_returns
 from src.muzero.temperature import temperature_for_step
-
-
-def _build_network(cfg_model: Dict[str, Any]) -> MuZeroNet:
-    return MuZeroNet(
-        input_channels=cfg_model["input_channels"],
-        input_spatial=cfg_model["input_spatial"],
-        hidden_channels=cfg_model["hidden_channels"],
-        hidden_spatial=cfg_model["hidden_spatial"],
-        num_actions=cfg_model["num_actions"],
-        value_support=tuple(cfg_model["value_support"]),
-        reward_support=tuple(cfg_model["reward_support"]),
-        rep_blocks=tuple(cfg_model["rep_blocks"]),
-        dyn_blocks=cfg_model["dyn_blocks"],
-        pred_blocks=cfg_model["pred_blocks"],
-    )
+from src.selfplay.inference_server import RemoteNetwork
 
 
 def selfplay_worker(
     worker_id: int,
     level: str,
     cfg_pkl: bytes,
-    weights_conn,   # receive latest state_dict
-    traj_queue,     # send completed Trajectory
-    status_queue,   # send episode-level scalar logs (dict)
-    train_step_val, # shared int (Value) controlled by learner
+    request_queue,    # shared mp.Queue to the inference server
+    reply_conn,       # per-worker mp.Pipe reader for server replies
+    traj_queue,       # send completed Trajectory
+    status_queue,     # send episode-level scalar logs (dict)
+    train_step_val,   # shared int (Value) controlled by learner
 ):
     """Entrypoint for a self-play child process.
 
@@ -77,8 +63,11 @@ def selfplay_worker(
         seed=seed,
     )
 
-    net = _build_network(cfg["model"]).to(device)
-    net.eval()
+    net = RemoteNetwork(
+        worker_id=worker_id,
+        request_queue=request_queue,
+        reply_conn=reply_conn,
+    )
 
     mcts = MCTS(
         discount=cfg["muzero"]["discount"],
@@ -100,18 +89,6 @@ def selfplay_worker(
     max_traj_len = int(cfg["selfplay"]["max_trajectory_length"])
 
     while True:
-        # Drain any waiting weight updates.
-        while weights_conn.poll():
-            try:
-                sd = weights_conn.recv()
-                if sd is None:  # shutdown sentinel
-                    env.close()
-                    return
-                net.load_state_dict(sd, strict=True)
-            except EOFError:
-                env.close()
-                return
-
         step = int(train_step_val.value)
         temperature = temperature_for_step(step, temperature_schedule)
 
