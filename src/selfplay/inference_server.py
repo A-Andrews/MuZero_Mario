@@ -58,6 +58,8 @@ class InferenceServer:
         max_wait_ms: float = 1.0,
         use_amp: bool = True,
         amp_dtype: torch.dtype = torch.bfloat16,
+        wire_dtype: str = "float32",
+        pad_batches: bool = False,
     ):
         self.cfg_model = cfg_model
         self.request_queue = request_queue
@@ -67,6 +69,19 @@ class InferenceServer:
         self.max_wait_s = float(max_wait_ms) / 1000.0
         self.use_amp = use_amp and (device.type == "cuda")
         self.amp_dtype = amp_dtype
+        # Transport dtype for the (large) hidden-state arrays shipped over the
+        # mp.Queue / Pipe. "float32" is byte-identical to the network output;
+        # "float16" halves IPC volume at a small precision cost. Scalars
+        # (value/reward) always stay float32.
+        self._wire_np_dtype = np.dtype(wire_dtype)
+        # When True, pad each forward's batch dim up to the next power-of-two
+        # bucket (capped at max_batch) so cuDNN autotunes a small fixed set of
+        # shapes instead of re-tuning on every batch size. Padding rows are
+        # independent of real rows (eval BN uses running stats; hidden-state
+        # min-max norm is per-sample) and are sliced off, so replies match the
+        # unpadded forward up to float32 conv accumulation-order rounding
+        # (~1e-7; the real rows are mathematically unchanged).
+        self.pad_batches = bool(pad_batches)
 
         self._net = _build_network(cfg_model).to(device).eval()
         if self.use_amp:
@@ -145,6 +160,15 @@ class InferenceServer:
 
             self._run_batch(batch)
 
+    def _bucket_size(self, n: int) -> int:
+        """Smallest power-of-two >= n, capped at max_batch (and >= n)."""
+        if not self.pad_batches or n <= 0:
+            return n
+        b = 1
+        while b < n:
+            b <<= 1
+        return min(max(b, n), self.max_batch)
+
     def _run_batch(self, batch: List[Tuple[int, int, Any]]):
         init_idx: List[int] = []
         init_obs: List[np.ndarray] = []
@@ -171,13 +195,21 @@ class InferenceServer:
         replies: List[Optional[Tuple[Any, ...]]] = [None] * len(batch)
         with torch.inference_mode():
             if init_obs:
+                n = len(init_obs)
                 obs_np = np.stack(init_obs, axis=0)
-                obs_t = torch.from_numpy(obs_np).to(self.device, non_blocking=True)
+                bucket = self._bucket_size(n)
+                if bucket > n:
+                    obs_np = np.concatenate(
+                        [obs_np, np.repeat(obs_np[-1:], bucket - n, axis=0)], axis=0
+                    )
+                obs_t = torch.from_numpy(obs_np).to(self.device, non_blocking=True).float()
                 if self.use_amp:
                     obs_t = obs_t.contiguous(memory_format=torch.channels_last)
                 with amp_ctx:
                     h, policy_logits, value = self._net.initial_inference(obs_t)
-                h_np = h.float().detach().cpu().numpy()
+                # Drop padding rows before transport (real rows unchanged).
+                h = h[:n]; policy_logits = policy_logits[:n]; value = value[:n]
+                h_np = h.detach().float().cpu().numpy().astype(self._wire_np_dtype, copy=False)
                 policy_logits_np = policy_logits.float().detach().cpu().numpy()
                 value_np = value.float().detach().cpu().numpy()
                 for j, idx in enumerate(init_idx):
@@ -188,17 +220,29 @@ class InferenceServer:
                     )
 
             if recur_h:
-                h_stack = torch.from_numpy(np.stack(recur_h, axis=0)).to(
+                n = len(recur_h)
+                h_np_stack = np.stack(recur_h, axis=0)
+                a_list = list(recur_a)
+                bucket = self._bucket_size(n)
+                if bucket > n:
+                    h_np_stack = np.concatenate(
+                        [h_np_stack, np.repeat(h_np_stack[-1:], bucket - n, axis=0)], axis=0
+                    )
+                    a_list = a_list + [a_list[-1]] * (bucket - n)
+                h_stack = torch.from_numpy(h_np_stack).to(
                     self.device, non_blocking=True
-                )
-                a_stack = torch.tensor(recur_a, dtype=torch.long, device=self.device)
+                ).float()
+                a_stack = torch.tensor(a_list, dtype=torch.long, device=self.device)
                 if self.use_amp:
                     h_stack = h_stack.contiguous(memory_format=torch.channels_last)
                 with amp_ctx:
                     h_next, reward, policy_logits, value = self._net.recurrent_inference(
                         h_stack, a_stack
                     )
-                h_next_np = h_next.float().detach().cpu().numpy()
+                # Drop padding rows before transport (real rows unchanged).
+                h_next = h_next[:n]; reward = reward[:n]
+                policy_logits = policy_logits[:n]; value = value[:n]
+                h_next_np = h_next.detach().float().cpu().numpy().astype(self._wire_np_dtype, copy=False)
                 reward_np = reward.float().detach().cpu().numpy()
                 policy_logits_np = policy_logits.float().detach().cpu().numpy()
                 value_np = value.float().detach().cpu().numpy()
@@ -230,41 +274,44 @@ class _NullCtx:
 class RemoteNetwork:
     """Stands in for a MuZeroNet inside worker processes.
 
-    Exposes `initial_inference` and `recurrent_inference` with the same return
-    shapes and types as the real network. Hidden states are returned as CPU
-    torch.Tensor objects but are shipped across the queue as numpy arrays — that
-    avoids torch.multiprocessing's shared-memory fd churn on every MCTS step.
+    Exposes `initial_inference` and `recurrent_inference` with the same policy /
+    value return types as the real network (torch tensors, so MCTS can softmax
+    / .item() them). The hidden state is kept as a numpy array with a leading
+    batch dim: MCTS/Node treat it opaquely (store it, hand it back), so there is
+    no reason to round-trip it through torch on every simulation. Hidden states
+    cross the queue as numpy arrays anyway, which also avoids
+    torch.multiprocessing's shared-memory fd churn on every MCTS step.
     """
 
-    def __init__(self, worker_id: int, request_queue, reply_conn):
+    def __init__(self, worker_id: int, request_queue, reply_conn, wire_dtype: str = "float32"):
         self._wid = int(worker_id)
         self._q = request_queue
         self._reply = reply_conn
+        self._wire_np_dtype = np.dtype(wire_dtype)
 
     def eval(self):
         return self
 
     def initial_inference(self, obs_tensor: torch.Tensor):
-        # obs_tensor: (1, C, H, W) float32 on CPU.
-        obs_np = obs_tensor.squeeze(0).detach().cpu().numpy().astype(np.float32)
+        # obs_tensor: (1, C, H, W) float32 on CPU. obs precision is kept fp32
+        # (it is cheap — one request per env step, not per simulation).
+        obs_np = np.ascontiguousarray(obs_tensor.squeeze(0).detach().cpu().numpy(), dtype=np.float32)
         self._q.put((self._wid, INITIAL, obs_np))
-        reply = self._recv_reply()
-        h_np, policy_logits_np, value = reply
-        # MCTS expects (1, ...) shapes; add batch dim back.
-        h = torch.from_numpy(h_np).unsqueeze(0)
+        h_np, policy_logits_np, value = self._recv_reply()
+        # Hidden state stays numpy; add batch dim back for shape parity.
+        h = h_np[None, ...]
         policy_logits_t = torch.from_numpy(policy_logits_np).unsqueeze(0)
         value_t = torch.tensor([value], dtype=torch.float32)
         return h, policy_logits_t, value_t
 
-    def recurrent_inference(self, h_state: torch.Tensor, action_tensor: torch.Tensor):
-        # h_state is (1, C, H, W) torch.Tensor — strip batch dim and ship as numpy
-        # to avoid torch.multiprocessing shared-memory fd churn through mp.Queue.
-        h_np = h_state.squeeze(0).detach().cpu().numpy().astype(np.float32)
+    def recurrent_inference(self, h_state, action_tensor: torch.Tensor):
+        # h_state is the numpy (1, C, H, W) array we returned previously — no
+        # torch<->numpy ping-pong. Strip batch dim and ship at the wire dtype.
+        h_np = np.ascontiguousarray(h_state[0], dtype=self._wire_np_dtype)
         action_idx = int(action_tensor.item())
         self._q.put((self._wid, RECURRENT, (h_np, action_idx)))
-        reply = self._recv_reply()
-        h_next_np, reward, policy_logits_np, value = reply
-        h_next = torch.from_numpy(h_next_np).unsqueeze(0)
+        h_next_np, reward, policy_logits_np, value = self._recv_reply()
+        h_next = h_next_np[None, ...]
         reward_t = torch.tensor([reward], dtype=torch.float32)
         policy_logits_t = torch.from_numpy(policy_logits_np).unsqueeze(0)
         value_t = torch.tensor([value], dtype=torch.float32)

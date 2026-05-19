@@ -68,6 +68,15 @@ inference_server:
   max_batch: 48
   max_wait_ms: 1.0
   use_amp: true
+  # Transport dtype for hidden-state arrays over the worker<->server IPC.
+  # float32 is byte-identical to the network output; float16 halves IPC
+  # volume at a small precision cost (value/reward scalars stay float32).
+  wire_dtype: float32
+  # Pad each GPU forward to a power-of-two batch bucket so cuDNN autotunes a
+  # small fixed set of shapes (cudnn.benchmark) instead of re-tuning per size.
+  # Padding rows are sliced off; replies match the unpadded forward up to
+  # float32 rounding (~1e-7), the real rows are mathematically unchanged.
+  pad_batches: false
 
 learner_torch_threads: 1
 

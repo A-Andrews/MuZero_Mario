@@ -149,7 +149,12 @@ class TrajectoryBuffer:
 
     def sample(self, batch_size: int, train_step: int):
         assert self._size > 0, "empty buffer"
-        weights = np.maximum(self._flat_priorities, self.eps) ** self.alpha
+        weights = np.maximum(self._flat_priorities, self.eps)
+        if self.alpha != 1.0:
+            # x ** 1.0 == x exactly in IEEE754, so the common alpha==1.0 path
+            # skips an extra full-length array allocation+copy every step
+            # without changing the sampling distribution or RNG draws.
+            weights = weights ** self.alpha
         probs = weights / weights.sum()
         chosen = np.random.choice(len(probs), size=batch_size, p=probs, replace=True)
 

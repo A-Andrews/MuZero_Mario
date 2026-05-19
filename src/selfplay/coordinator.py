@@ -55,6 +55,8 @@ class SelfPlayCoordinator:
             max_batch=int(cfg.get("inference_server", {}).get("max_batch", num_workers * 4)),
             max_wait_ms=float(cfg.get("inference_server", {}).get("max_wait_ms", 1.0)),
             use_amp=bool(cfg.get("inference_server", {}).get("use_amp", True)),
+            wire_dtype=str(cfg.get("inference_server", {}).get("wire_dtype", "float32")),
+            pad_batches=bool(cfg.get("inference_server", {}).get("pad_batches", False)),
         )
         if initial_state_dict is not None:
             # Pre-load learner weights so workers never see the server's

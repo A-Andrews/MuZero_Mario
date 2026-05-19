@@ -67,6 +67,7 @@ def selfplay_worker(
         worker_id=worker_id,
         request_queue=request_queue,
         reply_conn=reply_conn,
+        wire_dtype=str(cfg.get("inference_server", {}).get("wire_dtype", "float32")),
     )
 
     mcts = MCTS(
