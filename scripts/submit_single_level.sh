@@ -8,6 +8,8 @@
 #SBATCH -o logs/muzero_mario-%j.out
 #SBATCH -e logs/muzero_mario-%j.err
 #SBATCH --time=48:00:00
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=austin.andrews@reuben.ox.ac.uk
 
 set -euo pipefail
 
