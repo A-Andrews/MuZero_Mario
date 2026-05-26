@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import signal
 import sys
 from pathlib import Path
 
@@ -164,8 +165,18 @@ def main(cfg: DictConfig):
     coordinator.set_train_step(start_step)
     print("[train] weights broadcast done, starting training loop", flush=True)
 
+    # SLURM sends SIGTERM ~32s before the wall. Re-raise as KeyboardInterrupt
+    # so the try/finally below unwinds and wandb.finish() runs — otherwise the
+    # run is mislabelled "crashed" on wandb instead of "finished (truncated)".
+    def _handle_sigterm(signum, frame):
+        raise KeyboardInterrupt("SIGTERM received")
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+
     try:
         trainer.training_loop(start_step=start_step)
+    except KeyboardInterrupt as e:
+        print(f"[train] interrupted ({e}); finalizing wandb", flush=True)
     finally:
         trainer.close()
         coordinator.stop()
