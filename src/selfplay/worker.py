@@ -1,23 +1,24 @@
 """Self-play worker process.
 
-Each worker owns one retro env (for one level) and a CPU copy of the MuZero
-network. It runs an endless loop of:
+Each worker plays Mario via gym-retro and runs MCTS through the central
+inference server. Per-episode loop:
 
-    1. reset env (or continue from current state if not done)
-    2. run MCTS with temperature set by the learner
-    3. step env with the sampled action
-    4. when episode ends, compute returns + priorities, push a `Trajectory` to
-       the `traj_queue`
+    1. (autocurriculum) sample the next level from shared weights, swap env
+       if needed
+    2. reset env
+    3. for each step: run MCTS, take action, accumulate trajectory data
+    4. on episode end, push a ``Trajectory`` + a status dict to the learner
 
-Between episodes the worker drains the `weights_queue` and loads the latest
-network `state_dict()` from the learner.
+Between episodes the worker re-reads the level-sampling weights array; weights
+are pushed by the learner asynchronously, so a worker only ever sees a
+consistent snapshot, never a partial update.
 """
 from __future__ import annotations
 
 import os
 import pickle
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -30,19 +31,42 @@ from src.muzero.temperature import temperature_for_step
 from src.selfplay.inference_server import RemoteNetwork
 
 
+def _sample_level(
+    levels: Sequence[str],
+    weights_array,
+    rng: np.random.Generator,
+) -> str:
+    """Sample a level from the shared mp.Array of weights.
+
+    Snapshot under the array's lock so the worker never sees a half-written
+    update. Falls back to uniform if the array is degenerate (all zero / NaN).
+    """
+    with weights_array.get_lock():
+        w = np.array(weights_array[:], dtype=np.float64)
+    w = np.where(np.isfinite(w) & (w > 0.0), w, 0.0)
+    s = w.sum()
+    if s <= 0.0:
+        return levels[int(rng.integers(len(levels)))]
+    p = w / s
+    return levels[int(rng.choice(len(levels), p=p))]
+
+
 def selfplay_worker(
     worker_id: int,
-    level: str,
+    initial_level: str,
+    levels: List[str],
+    level_weights,           # shared mp.Array(c_double, num_levels)
+    autocurriculum_enabled: bool,
     cfg_pkl: bytes,
-    request_queue,    # shared mp.Queue to the inference server
-    reply_conn,       # per-worker mp.Pipe reader for server replies
-    traj_queue,       # send completed Trajectory
-    status_queue,     # send episode-level scalar logs (dict)
-    train_step_val,   # shared int (Value) controlled by learner
+    request_queue,           # shared mp.Queue to the inference server
+    reply_conn,              # per-worker mp.Pipe reader for server replies
+    traj_queue,              # send completed Trajectory
+    status_queue,            # send episode-level scalar logs (dict)
+    train_step_val,          # shared int (Value) controlled by learner
 ):
     """Entrypoint for a self-play child process.
 
-    `cfg_pkl` is a pickled dict holding the subset of config the worker needs
+    ``cfg_pkl`` is a pickled dict holding the subset of config the worker needs
     (config objects are not always picklable through Hydra's proxy types).
     """
     cfg = pickle.loads(cfg_pkl)
@@ -50,18 +74,23 @@ def selfplay_worker(
     seed = cfg["seed"] + worker_id
     np.random.seed(seed)
     torch.manual_seed(seed)
+    rng = np.random.default_rng(seed)
 
     device = torch.device("cpu")
 
-    env = create_train_env(
-        level=level,
-        int_path=cfg["env"]["int_path"],
-        player_actions=None,
-        n_frame=cfg["env"]["n_frame_stack"],
-        downsample=cfg["env"]["frame_skip"],
-        pad_to=cfg["model"]["input_spatial"] if cfg["env"]["pad_to_input_spatial"] else None,
-        seed=seed,
-    )
+    def _make_env(lv: str, env_seed: int):
+        return create_train_env(
+            level=lv,
+            int_path=cfg["env"]["int_path"],
+            player_actions=None,
+            n_frame=cfg["env"]["n_frame_stack"],
+            downsample=cfg["env"]["frame_skip"],
+            pad_to=cfg["model"]["input_spatial"] if cfg["env"]["pad_to_input_spatial"] else None,
+            seed=env_seed,
+        )
+
+    current_level = initial_level
+    env = _make_env(current_level, seed)
 
     net = RemoteNetwork(
         worker_id=worker_id,
@@ -112,7 +141,7 @@ def selfplay_worker(
 
         if done or ep_steps >= max_traj_len:
             traj = _finalise_trajectory(
-                level=level,
+                level=current_level,
                 obs_list=ep_obs,
                 actions=ep_actions,
                 rewards=ep_rewards,
@@ -127,7 +156,7 @@ def selfplay_worker(
                 status_queue.put(
                     {
                         "worker_id": worker_id,
-                        "level": level,
+                        "level": current_level,
                         "episode_return": ep_return,
                         "episode_length": ep_steps,
                         "final_x_pos": int(
@@ -144,6 +173,22 @@ def selfplay_worker(
             ep_obs, ep_actions, ep_rewards, ep_policies, ep_root_q = [], [], [], [], []
             ep_steps = 0
             ep_return = 0.0
+
+            # Pick the next level under the current curriculum, then either
+            # keep the existing env or close+rebuild for the new level. Retro
+            # envs are tied to a single state at make-time so we cannot just
+            # reset across levels.
+            if autocurriculum_enabled:
+                next_level = _sample_level(levels, level_weights, rng)
+            else:
+                next_level = current_level
+            if next_level != current_level:
+                try:
+                    env.close()
+                except Exception:
+                    pass
+                current_level = next_level
+                env = _make_env(current_level, seed)
             obs = env.reset()
 
 

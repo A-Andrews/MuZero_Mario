@@ -6,6 +6,14 @@ defaults:
 seed: 2024
 device: cuda
 
+# Stable name for resume-friendly runs. When set:
+#   - the submission scripts pin hydra.run.dir = outputs/runs/${run_name}
+#   - train_muzero.py auto-resumes from outputs/runs/${run_name}/checkpoints/latest.pt
+#     if it exists (no need to pass resume.path)
+#   - wandb run uses this name as a stable id with resume="allow"
+# Leave null for one-shot runs that should NOT resume.
+run_name: null
+
 training:
   total_env_steps: 1_000_000
   batch_size: 128
@@ -77,6 +85,19 @@ inference_server:
   # Padding rows are sliced off; replies match the unpadded forward up to
   # float32 rounding (~1e-7), the real rows are mathematically unchanged.
   pad_batches: false
+
+# Inverse-length autocurriculum across env.levels. Workers sample the next
+# level at every episode boundary from a shared weight vector; weights are
+# proportional to 1/mean_episode_length^exponent so levels where episodes
+# last *longer* are sampled *less*. Set enabled=false to keep the legacy
+# fixed worker-to-level assignment.
+autocurriculum:
+  enabled: true
+  history_size: 50            # episodes per level kept in the rolling window
+  exponent: 1.0               # >1 sharpens curriculum, <1 softens it
+  min_weight: 0.02            # floor on per-level probability after renorm
+  update_every_train_steps: 200   # how often the learner pushes new weights
+  warmup_episodes_per_level: 3    # keep weights uniform until every level has this many episodes
 
 learner_torch_threads: 1
 

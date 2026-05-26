@@ -89,12 +89,31 @@ def main(cfg: DictConfig):
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["env"] = env_cfg  # ensure resolved int_path propagates
 
+    # --- resume-from-latest auto-detection -----------------------------------
+    # If cfg.run_name is set, treat out_dir/checkpoints/latest.pt as the
+    # canonical resume point: the same SLURM script can be resubmitted with
+    # --dependency=afterany and will pick up where the previous job stopped.
+    # Explicit cfg.resume.path always wins so users can still pin a specific
+    # checkpoint.
+    run_name = cfg_dict.get("run_name")
+    auto_resume_path = None
+    if cfg.resume.path is None and run_name:
+        candidate = out_dir / "checkpoints" / "latest.pt"
+        if candidate.exists():
+            auto_resume_path = candidate
+            print(f"[train] auto-resume: found {candidate}")
+
     # --- wandb ----------------------------------------------------------------
     w = cfg_dict["wandb"]
+    # When run_name is set, use it as a stable wandb id so re-submitted SLURM
+    # jobs append to the original run rather than spawning a fresh one. Without
+    # run_name, fall back to wandb's auto-generated id (original behavior).
+    wandb_id = run_name if run_name else None
+    wandb_resume = "allow" if run_name else None
     wandb_logger = WandbLogger(
         project=w["project"],
         entity=w.get("entity"),
-        name=w.get("name"),
+        name=w.get("name") or run_name,
         config=cfg_dict,
         mode=w.get("mode", "online"),
         dir=str(out_dir),
@@ -102,6 +121,8 @@ def main(cfg: DictConfig):
         notes=w.get("notes"),
         group=w.get("group"),
         job_type=w.get("job_type"),
+        id=wandb_id,
+        resume=wandb_resume,
     )
 
     # --- networks + optimizer -------------------------------------------------
@@ -155,9 +176,10 @@ def main(cfg: DictConfig):
     )
 
     start_step = 0
-    if cfg.resume.path is not None:
-        start_step = trainer.load(cfg.resume.path)
-        print(f"[train] resumed at training_step={start_step}")
+    resume_path = cfg.resume.path if cfg.resume.path is not None else auto_resume_path
+    if resume_path is not None:
+        start_step = trainer.load(resume_path)
+        print(f"[train] resumed at training_step={start_step} from {resume_path}")
 
     print("[train] trainer created, broadcasting weights...", flush=True)
     # Send initial (or resumed) weights to workers before training begins.

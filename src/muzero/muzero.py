@@ -27,6 +27,7 @@ from src.logs.video import save_video
 from src.muzero.buffer import TrajectoryBuffer
 from src.muzero.networks import MuZeroNet
 from src.muzero.transforms import cross_entropy_on_support, support_to_scalar
+from src.selfplay.autocurriculum import LevelSampler
 from src.selfplay.coordinator import SelfPlayCoordinator
 from src.selfplay.replay_eval import run_replay_rollout
 
@@ -175,6 +176,19 @@ class MuzeroLearner:
 
         self._recent_losses = deque(maxlen=100)
 
+        # --- autocurriculum: inverse-length per-level sampling ---------------
+        ac = cfg.get("autocurriculum", {}) or {}
+        self._ac_enabled = bool(ac.get("enabled", False)) and len(cfg["env"]["levels"]) > 1
+        self._ac_update_every = int(ac.get("update_every_train_steps", 200))
+        self._ac_warmup_per_level = int(ac.get("warmup_episodes_per_level", 3))
+        self._level_sampler = LevelSampler(
+            levels=list(cfg["env"]["levels"]),
+            history_size=int(ac.get("history_size", 50)),
+            exponent=float(ac.get("exponent", 1.0)),
+            min_weight=float(ac.get("min_weight", 0.02)),
+        )
+        self._ac_episodes_seen = {lv: 0 for lv in cfg["env"]["levels"]}
+
         # Prefetch is primed once on the first post-warmup step; every
         # _train_step then requests the next batch itself.
         self._prefetch_primed = False
@@ -211,12 +225,16 @@ class MuzeroLearner:
                 self.env_step += int(traj.length)
                 self.buffer.add(traj)
             for status in self.coord.drain_status(max_items=256):
+                lv = status["level"]
+                self._level_sampler.record_episode(lv, status["episode_length"])
+                if lv in self._ac_episodes_seen:
+                    self._ac_episodes_seen[lv] += 1
                 self.wandb.log(
                     {
-                        f"selfplay/episode_return/{status['level']}": status["episode_return"],
-                        f"selfplay/episode_length/{status['level']}": status["episode_length"],
-                        f"selfplay/final_x_pos/{status['level']}": status["final_x_pos"],
-                        f"selfplay/mcts_root_q_mean/{status['level']}": status["mcts_root_q_mean"],
+                        f"selfplay/episode_return/{lv}": status["episode_return"],
+                        f"selfplay/episode_length/{lv}": status["episode_length"],
+                        f"selfplay/final_x_pos/{lv}": status["final_x_pos"],
+                        f"selfplay/mcts_root_q_mean/{lv}": status["mcts_root_q_mean"],
                     },
                     step=self.training_step,
                 )
@@ -240,6 +258,13 @@ class MuzeroLearner:
             if self.weight_broadcast_every > 0 and self.training_step % self.weight_broadcast_every == 0:
                 self.coord.broadcast_weights(self.net.state_dict())
                 self.coord.set_train_step(self.training_step)
+
+            if (
+                self._ac_enabled
+                and self._ac_update_every > 0
+                and self.training_step % self._ac_update_every == 0
+            ):
+                self._push_curriculum_weights()
 
             if self.log_every > 0 and self.training_step % self.log_every == 0:
                 now = time.time()
@@ -357,6 +382,33 @@ class MuzeroLearner:
         }
 
     # -- housekeeping ---------------------------------------------------------
+
+    def _push_curriculum_weights(self) -> None:
+        """Recompute inverse-length weights and push them to workers.
+
+        Stays uniform until every level has at least ``warmup_episodes_per_level``
+        completed episodes; this avoids a "first level to finish wins all
+        worker slots" pathology before there is any signal to act on.
+        """
+        ready = all(
+            n >= self._ac_warmup_per_level for n in self._ac_episodes_seen.values()
+        )
+        levels = self._level_sampler.levels
+        if ready:
+            weights = self._level_sampler.compute_weights()
+        else:
+            uniform = 1.0 / len(levels)
+            weights = {lv: uniform for lv in levels}
+        self.coord.update_level_weights(weights)
+        means = self._level_sampler.mean_lengths()
+        metrics = {}
+        for lv in levels:
+            metrics[f"autocurriculum/weight/{lv}"] = float(weights[lv])
+            m = means[lv]
+            if m == m:  # not NaN
+                metrics[f"autocurriculum/mean_length/{lv}"] = float(m)
+        metrics["autocurriculum/active"] = 1.0 if ready else 0.0
+        self.wandb.log(metrics, step=self.training_step)
 
     def _log_training(self, traj_rate):
         if not self._recent_losses:
