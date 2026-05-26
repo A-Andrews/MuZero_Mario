@@ -36,6 +36,7 @@ class MCTS:
         self.pb_c_init = pb_c_init
         self.device = device
 
+    @torch.inference_mode()
     def run(self, obs_np, network, temperature=1.0, deterministic=False):
         """Run MCTS from the current environment observation.
 

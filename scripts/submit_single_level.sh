@@ -8,6 +8,8 @@
 #SBATCH -o logs/muzero_mario-%j.out
 #SBATCH -e logs/muzero_mario-%j.err
 #SBATCH --time=48:00:00
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=austin.andrews@reuben.ox.ac.uk
 
 set -euo pipefail
 
@@ -32,6 +34,17 @@ export WANDB_DIR="${SLURM_SUBMIT_DIR}/wandb_runs"
 mkdir -p "${SLURM_SUBMIT_DIR}/logs" "${SLURM_SUBMIT_DIR}/wandb_runs"
 
 cd "${SLURM_SUBMIT_DIR}"
-srun python scripts/train_muzero.py "env.levels=[${LEVEL}]" "$@"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "Git: branch=${GIT_BRANCH} sha=${GIT_SHA}"
+
+# Auto-tag every run with SLURM job id, level, git branch, and git sha so
+# wandb runs are traceable back to logs AND to the code version that produced
+# them. Caller can still add more tags/notes via extra args.
+srun python scripts/train_muzero.py \
+    "env.levels=[${LEVEL}]" \
+    "++wandb.tags=[slurm-${SLURM_JOB_ID},level-${LEVEL},branch-${GIT_BRANCH},sha-${GIT_SHA}]" \
+    "++wandb.group=branch-${GIT_BRANCH}" \
+    "$@"
 
 echo "Done: $(date)"
