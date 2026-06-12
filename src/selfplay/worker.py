@@ -87,6 +87,8 @@ def selfplay_worker(
             downsample=cfg["env"]["frame_skip"],
             pad_to=cfg["model"]["input_spatial"] if cfg["env"]["pad_to_input_spatial"] else None,
             seed=env_seed,
+            done_on_life_loss=bool(cfg["env"].get("done_on_life_loss", True)),
+            completion_bonus=float(cfg["env"].get("completion_bonus", 100.0)),
         )
 
     current_level = initial_level
@@ -164,6 +166,7 @@ def selfplay_worker(
                             + int(info["player_x_posLo"])
                         ),
                         "mcts_root_q_mean": float(np.mean(ep_root_q)) if ep_root_q else 0.0,
+                        "completed": bool(info.get("level_complete", False)),
                         "train_step": step,
                     }
                 )

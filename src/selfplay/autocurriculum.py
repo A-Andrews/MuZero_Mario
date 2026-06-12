@@ -1,10 +1,13 @@
-"""Inverse-length autocurriculum for multi-level self-play.
+"""Inverse-length, completion-aware autocurriculum for multi-level self-play.
 
-The learner maintains a rolling window of recent episode lengths per level.
-Levels where episodes last *longer* (Mario "lives" longer there) get sampled
-*less*; short-lived levels get sampled more. The intuition: short episodes
-yield less data per worker-wallclock-second, so we compensate by playing them
-more frequently and steer the agent toward levels it is currently failing on.
+The learner maintains a rolling window of recent episode lengths and
+completion flags per level. Two signals combine multiplicatively:
+
+  * inverse episode length — levels where Mario dies quickly (struggling)
+    get sampled more;
+  * incompletion rate — levels the agent already finishes reliably get
+    sampled less (down to the ``min_weight`` floor, which guards against
+    catastrophic forgetting), freeing worker time for unfinished levels.
 
 Weights are written into a shared ``mp.Array(c_double, num_levels)`` so workers
 pick them up without IPC: at each episode boundary they snapshot the array and
@@ -50,12 +53,16 @@ class LevelSampler:
         self._history: Dict[str, deque] = {
             lv: deque(maxlen=int(history_size)) for lv in self.levels
         }
+        self._completions: Dict[str, deque] = {
+            lv: deque(maxlen=int(history_size)) for lv in self.levels
+        }
         self.exponent = float(exponent)
         self.min_weight = float(min_weight)
 
-    def record_episode(self, level: str, length: int) -> None:
+    def record_episode(self, level: str, length: int, completed: bool = False) -> None:
         if level in self._history:
             self._history[level].append(int(length))
+            self._completions[level].append(1.0 if completed else 0.0)
 
     def mean_lengths(self) -> Dict[str, float]:
         out: Dict[str, float] = {}
@@ -64,9 +71,17 @@ class LevelSampler:
             out[lv] = (sum(h) / len(h)) if h else float("nan")
         return out
 
+    def completion_rates(self) -> Dict[str, float]:
+        out: Dict[str, float] = {}
+        for lv in self.levels:
+            c = self._completions[lv]
+            out[lv] = (sum(c) / len(c)) if c else 0.0
+        return out
+
     def compute_weights(self) -> Dict[str, float]:
         """Return a normalized weight per level (sums to 1.0)."""
         means = self.mean_lengths()
+        completion = self.completion_rates()
         # Levels with no history get the average of the populated levels so
         # they are explored at a sensible baseline rate, not starved.
         populated = [v for v in means.values() if v == v]  # filter NaN
@@ -76,7 +91,11 @@ class LevelSampler:
             m = means[lv]
             if m != m:  # NaN
                 m = fallback
-            raw.append(1.0 / max(float(m), 1.0) ** self.exponent)
+            inv_len = 1.0 / max(float(m), 1.0) ** self.exponent
+            # Down-weight mastered levels; the small offset keeps a fully
+            # completed level from hitting exactly zero before the floor.
+            incompletion = 1.0 - float(completion[lv]) + 0.05
+            raw.append(inv_len * incompletion)
         total = sum(raw) or 1.0
         weights = [r / total for r in raw]
         # Apply the minimum-weight floor by pinning under-floor entries at the

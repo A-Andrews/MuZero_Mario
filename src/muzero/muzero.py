@@ -98,6 +98,8 @@ class _BatchPrefetcher:
                     "rewards": torch.from_numpy(batch_np["rewards"]),
                     "policies": torch.from_numpy(batch_np["policies"]),
                     "returns": torch.from_numpy(batch_np["returns"]),
+                    "next_obs": torch.from_numpy(batch_np["next_obs"]),
+                    "next_obs_mask": torch.from_numpy(batch_np["next_obs_mask"]),
                     "is_weights": torch.from_numpy(batch_np["is_weights"]),
                 }
                 if self._pin:
@@ -151,6 +153,15 @@ class MuzeroLearner:
         )
         self.log_every = int(tr["log_every_train_steps"])
         self.total_env_steps = int(tr["total_env_steps"])
+        # Cap on learner pace: at most `max_train_per_env_step` gradient steps
+        # per collected env step (<=0 disables). Keeps the replay ratio sane
+        # and leaves GPU headroom for the inference server when self-play is
+        # the bottleneck.
+        self.train_ratio = float(tr.get("max_train_per_env_step", 0.0))
+        self.replay_max_steps = int(
+            tr.get("replay_max_steps", 0)
+            or cfg["selfplay"]["max_trajectory_length"]
+        )
 
         m = cfg["muzero"]
         self.K = int(m["unroll_K"])
@@ -158,6 +169,7 @@ class MuzeroLearner:
         self.loss_w_v = float(m["loss_weight_value"])
         self.loss_w_r = float(m["loss_weight_reward"])
         self.loss_w_p = float(m["loss_weight_policy"])
+        self.loss_w_c = float(m.get("loss_weight_consistency", 0.0))
         self.value_support = (float(m["value_support_min"]), float(m["value_support_max"]), int(m["value_support_size"]))
         self.reward_support = (float(m["reward_support_min"]), float(m["reward_support_max"]), int(m["reward_support_size"]))
 
@@ -175,6 +187,9 @@ class MuzeroLearner:
         self.video_dir.mkdir(parents=True, exist_ok=True)
 
         self._recent_losses = deque(maxlen=100)
+        # Rolling completion flags over the last 100 self-play episodes
+        # (across all levels) — the headline "is Mario finishing levels" metric.
+        self._recent_completions = deque(maxlen=100)
 
         # --- autocurriculum: inverse-length per-level sampling ---------------
         ac = cfg.get("autocurriculum", {}) or {}
@@ -226,15 +241,23 @@ class MuzeroLearner:
                 self.buffer.add(traj)
             for status in self.coord.drain_status(max_items=256):
                 lv = status["level"]
-                self._level_sampler.record_episode(lv, status["episode_length"])
+                completed = bool(status.get("completed", False))
+                self._level_sampler.record_episode(
+                    lv, status["episode_length"], completed=completed
+                )
                 if lv in self._ac_episodes_seen:
                     self._ac_episodes_seen[lv] += 1
+                self._recent_completions.append(1.0 if completed else 0.0)
                 self.wandb.log(
                     {
                         f"selfplay/episode_return/{lv}": status["episode_return"],
                         f"selfplay/episode_length/{lv}": status["episode_length"],
                         f"selfplay/final_x_pos/{lv}": status["final_x_pos"],
                         f"selfplay/mcts_root_q_mean/{lv}": status["mcts_root_q_mean"],
+                        f"selfplay/completed/{lv}": 1.0 if completed else 0.0,
+                        "selfplay/completion_rate_100ep": float(
+                            np.mean(self._recent_completions)
+                        ),
                     },
                     step=self.training_step,
                 )
@@ -242,6 +265,11 @@ class MuzeroLearner:
             # 2) Gradient step if warm enough
             if self.buffer.size_transitions() < self.min_replay:
                 time.sleep(0.05)
+                continue
+
+            # Learner pace cap: don't run ahead of self-play data collection.
+            if self.train_ratio > 0.0 and self.training_step >= self.env_step * self.train_ratio:
+                time.sleep(0.02)
                 continue
 
             # Prime the prefetch exactly once (first post-warmup step). After
@@ -309,6 +337,9 @@ class MuzeroLearner:
         policies = batch["policies"].to(self.device, non_blocking=pin)
         returns = batch["returns"].to(self.device, non_blocking=pin)
         is_w = batch["is_weights"].to(self.device, non_blocking=pin)
+        if self.loss_w_c > 0.0:
+            next_obs = batch["next_obs"].to(self.device, non_blocking=pin)
+            next_obs_mask = batch["next_obs_mask"].to(self.device, non_blocking=pin)
         sample_locations = batch["sample_locations"]
 
         amp_ctx = (
@@ -334,10 +365,13 @@ class MuzeroLearner:
             reward_loss_recur = torch.zeros_like(value_loss_init)
             policy_loss_recur = torch.zeros_like(value_loss_init)
 
+            unrolled_h = [] if self.loss_w_c > 0.0 else None
             for k in range(self.K):
                 h, reward_logits, policy_logits, value_logits = self.net.recurrent_step(h, actions[:, k])
                 # Gradient scaling 0.5x on the dynamics hidden output
                 h.register_hook(lambda grad: grad * 0.5)
+                if unrolled_h is not None:
+                    unrolled_h.append(h)
 
                 reward_loss_recur = reward_loss_recur + cross_entropy_on_support(
                     reward_logits.float(), rewards[:, k], *self.reward_support
@@ -354,10 +388,35 @@ class MuzeroLearner:
             reward_loss_total = recur_scale * reward_loss_recur
             policy_loss_total = policy_loss_init + recur_scale * policy_loss_recur
 
+            # EfficientZero-style self-supervised consistency: pull the
+            # dynamics-unrolled hidden state at step k toward the (stop-grad)
+            # representation of the real observation at t+k.
+            consistency_loss_total = torch.zeros_like(value_loss_init)
+            if self.loss_w_c > 0.0:
+                B = next_obs_mask.shape[0]
+                flat_next = next_obs.reshape(B * self.K, *next_obs.shape[2:])
+                flat_next = flat_next.float().div_(255.0)
+                if self.use_amp:
+                    flat_next = flat_next.contiguous(memory_format=torch.channels_last)
+                with torch.no_grad():
+                    h_target = self.net.representation(flat_next)
+                    proj_target = self.net.project(h_target, with_prediction=False)
+                h_dyn = torch.stack(unrolled_h, dim=1).reshape(
+                    B * self.K, *unrolled_h[0].shape[1:]
+                )
+                proj_dyn = self.net.project(h_dyn, with_prediction=True)
+                cos = F.cosine_similarity(
+                    proj_dyn.float(), proj_target.detach().float(), dim=-1
+                ).reshape(B, self.K)
+                consistency_loss_total = (
+                    -(cos * next_obs_mask).sum(dim=-1) * recur_scale
+                )
+
             loss_per_sample = (
                 self.loss_w_v * value_loss_total
                 + self.loss_w_r * reward_loss_total
                 + self.loss_w_p * policy_loss_total
+                + self.loss_w_c * consistency_loss_total
             )
             loss = (loss_per_sample * is_w).mean()
 
@@ -376,6 +435,7 @@ class MuzeroLearner:
             "value_loss": float(value_loss_total.mean().item()),
             "reward_loss": float(reward_loss_total.mean().item()),
             "policy_loss": float(policy_loss_total.mean().item()),
+            "consistency_loss": float(consistency_loss_total.mean().item()),
             "total_loss": float(loss.item()),
             "grad_norm": float(grad_norm),
             "is_weight_mean": float(is_w.mean().item()),
@@ -401,9 +461,11 @@ class MuzeroLearner:
             weights = {lv: uniform for lv in levels}
         self.coord.update_level_weights(weights)
         means = self._level_sampler.mean_lengths()
+        completion = self._level_sampler.completion_rates()
         metrics = {}
         for lv in levels:
             metrics[f"autocurriculum/weight/{lv}"] = float(weights[lv])
+            metrics[f"autocurriculum/completion_rate/{lv}"] = float(completion[lv])
             m = means[lv]
             if m == m:  # not NaN
                 metrics[f"autocurriculum/mean_length/{lv}"] = float(m)
@@ -536,7 +598,7 @@ class MuzeroLearner:
             video_fps = max(1, 60 // frame_skip)
             for level in env_cfg["levels"]:
                 try:
-                    frames, total_return, n_steps = run_replay_rollout(
+                    frames, total_return, n_steps, completed = run_replay_rollout(
                         level=level,
                         int_path=env_cfg["int_path"],
                         network=self._replay_net,
@@ -548,7 +610,7 @@ class MuzeroLearner:
                         n_frame_stack=int(env_cfg["n_frame_stack"]),
                         frame_skip=frame_skip,
                         pad_to=pad_to,
-                        max_steps=int(self.cfg["selfplay"]["max_trajectory_length"]),
+                        max_steps=self.replay_max_steps,
                         seed=int(self.cfg["seed"]) + 777,
                         bk2_path=video_step_dir / f"{level}.bk2",
                     )
@@ -564,6 +626,7 @@ class MuzeroLearner:
                         extra={
                             f"replay/{level}_return": total_return,
                             f"replay/{level}_length": n_steps,
+                            f"replay/{level}_completed": 1.0 if completed else 0.0,
                         },
                     )
                 except Exception as e:

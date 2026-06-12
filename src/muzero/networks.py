@@ -161,6 +161,33 @@ class PredictionNet(nn.Module):
         return policy_logits, value_logits
 
 
+class ProjectionNet(nn.Module):
+    """SimSiam-style projector + predictor for the EfficientZero consistency
+    loss. The projector maps a flattened hidden state to an embedding; the
+    predictor maps the *online* branch's embedding onto the (stop-gradient)
+    target branch's embedding.
+    """
+
+    def __init__(self, in_dim, proj_dim=1024, pred_hidden=512):
+        super().__init__()
+        self.projection = nn.Sequential(
+            nn.Linear(in_dim, proj_dim),
+            nn.BatchNorm1d(proj_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(proj_dim, proj_dim),
+            nn.BatchNorm1d(proj_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(proj_dim, proj_dim),
+            nn.BatchNorm1d(proj_dim),
+        )
+        self.predictor = nn.Sequential(
+            nn.Linear(proj_dim, pred_hidden),
+            nn.BatchNorm1d(pred_hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(pred_hidden, proj_dim),
+        )
+
+
 class MuZeroNet(nn.Module):
     """Bundles representation + dynamics + prediction. Emits support logits."""
 
@@ -205,6 +232,22 @@ class MuZeroNet(nn.Module):
             spatial=hidden_spatial,
             value_support_size=self.value_support_size,
         )
+        # Learner-only heads (never used by MCTS inference); kept inside the
+        # module so learner / inference-server state dicts stay identical.
+        self.projection_net = ProjectionNet(
+            in_dim=hidden_channels * hidden_spatial * hidden_spatial
+        )
+
+    def project(self, h, with_prediction=True):
+        """Project a hidden state for the consistency loss.
+
+        ``with_prediction=True`` is the online (dynamics) branch;
+        ``with_prediction=False`` is the stop-gradient target branch.
+        """
+        p = self.projection_net.projection(h.flatten(1))
+        if with_prediction:
+            p = self.projection_net.predictor(p)
+        return p
 
     # -- training-side unroll ----------------------------------------------
 

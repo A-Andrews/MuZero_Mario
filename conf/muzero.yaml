@@ -1,6 +1,6 @@
 defaults:
   - env: mario
-  - model: muzero_atari
+  - model: muzero_mario_small
   - _self_
 
 seed: 2024
@@ -17,18 +17,32 @@ run_name: null
 training:
   total_env_steps: 1_000_000
   batch_size: 128
+  # LR schedule: linear warmup over lr_warmup_steps, cosine decay from lr to
+  # lr_min over lr_decay_steps, then constant at lr_min. (The old StepLR
+  # x lr_decay_factor schedule decayed to ~1e-9 on long runs and froze
+  # learning — do not reintroduce it.)
   lr: 1.0e-3
-  lr_decay_steps: 100_000
-  lr_decay_factor: 0.1
+  lr_min: 1.0e-4
+  lr_warmup_steps: 1_000
+  lr_decay_steps: 1_500_000
   weight_decay: 1.0e-4
   grad_clip: 5.0
-  min_replay_transitions: 2_000
+  min_replay_transitions: 10_000
+  # Max gradient steps per collected env step (<=0 disables). Caps the replay
+  # ratio (effective samples/transition = ratio * batch_size) and stops the
+  # learner from starving the inference server of GPU when self-play is the
+  # bottleneck.
+  max_train_per_env_step: 0.3
   weight_broadcast_every: 100
   save_every_train_steps: 5_000
   # A replay rollout is a full greedy-MCTS episode on the GPU and contends
   # with the learner, so it runs on its own (sparser) cadence rather than
   # every checkpoint. <=0 falls back to save_every_train_steps.
-  replay_every_train_steps: 25_000
+  replay_every_train_steps: 50_000
+  # Step cap per replay-eval episode (<=0 falls back to
+  # selfplay.max_trajectory_length). Keeps the 12-level greedy-MCTS video
+  # sweep from monopolising the GPU between checkpoints.
+  replay_max_steps: 2_000
   log_every_train_steps: 100
 
 muzero:
@@ -44,16 +58,21 @@ muzero:
   loss_weight_value: 1.0
   loss_weight_reward: 1.0
   loss_weight_policy: 1.0
+  # EfficientZero-style self-supervised consistency loss (SimSiam projector;
+  # dynamics hidden state pulled toward the stop-grad representation of the
+  # real next observation). 0 disables. Big sample-efficiency win when
+  # env steps, not gradient steps, are the bottleneck.
+  loss_weight_consistency: 2.0
 
 mcts:
-  num_simulations: 50
+  num_simulations: 32
   pb_c_base: 19652
   pb_c_init: 1.25
   dirichlet_alpha: 0.25
   root_exploration_eps: 0.25
 
 buffer:
-  capacity_transitions: 100_000
+  capacity_transitions: 300_000
   priority_alpha: 1.0
   priority_beta_start: 0.4
   priority_beta_end: 1.0
@@ -61,30 +80,32 @@ buffer:
   eps_priority: 1.0e-3
 
 selfplay:
-  num_workers: 12
+  num_workers: 20
   max_queue_size: 32
   max_trajectory_length: 5_000
+  # Thresholds are learner train steps (with max_train_per_env_step=0.3 they
+  # lag env steps ~3.3x).
   temperature_schedule:
     - [0, 1.0]
-    - [50_000, 0.5]
-    - [100_000, 0.25]
+    - [100_000, 0.5]
+    - [300_000, 0.25]
 
 worker:
   torch_threads: 1
 
 inference_server:
-  max_batch: 48
+  max_batch: 64
   max_wait_ms: 1.0
   use_amp: true
   # Transport dtype for hidden-state arrays over the worker<->server IPC.
   # float32 is byte-identical to the network output; float16 halves IPC
   # volume at a small precision cost (value/reward scalars stay float32).
-  wire_dtype: float32
+  wire_dtype: float16
   # Pad each GPU forward to a power-of-two batch bucket so cuDNN autotunes a
   # small fixed set of shapes (cudnn.benchmark) instead of re-tuning per size.
   # Padding rows are sliced off; replies match the unpadded forward up to
   # float32 rounding (~1e-7), the real rows are mathematically unchanged.
-  pad_batches: false
+  pad_batches: true
 
 # Inverse-length autocurriculum across env.levels. Workers sample the next
 # level at every episode boundary from a shared weight vector; weights are

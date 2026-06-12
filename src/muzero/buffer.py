@@ -168,12 +168,13 @@ class TrajectoryBuffer:
         picked_ts = self._flat_positions[chosen]
 
         obs_batch, act_batch, rew_batch, pol_batch, ret_batch = [], [], [], [], []
+        nobs_batch, nmask_batch = [], []
         sample_locations: List[Tuple[int, int]] = []
         for i in range(batch_size):
             tid = int(picked_tids[i])
             t = int(picked_ts[i])
             traj = self.trajectories[tid]
-            obs, actions, rewards, policies, returns = build_targets(
+            obs, actions, rewards, policies, returns, next_obs, next_obs_mask = build_targets(
                 traj, t, self.K, self.num_actions
             )
             # obs is uint8 (C, H, W); normalise here on the single fresh copy.
@@ -182,6 +183,10 @@ class TrajectoryBuffer:
             rew_batch.append(rewards)
             pol_batch.append(policies)
             ret_batch.append(returns)
+            # next_obs stays uint8 — it is K× the size of obs, so it ships to
+            # the GPU compact and is normalised there.
+            nobs_batch.append(next_obs)
+            nmask_batch.append(next_obs_mask)
             sample_locations.append((tid, t))
 
         return {
@@ -190,6 +195,8 @@ class TrajectoryBuffer:
             "rewards": np.stack(rew_batch, axis=0),       # (B, K)
             "policies": np.stack(pol_batch, axis=0),      # (B, K+1, A)
             "returns": np.stack(ret_batch, axis=0),       # (B, K+1)
+            "next_obs": np.stack(nobs_batch, axis=0),     # (B, K, C, H, W) uint8
+            "next_obs_mask": np.stack(nmask_batch, axis=0),  # (B, K) float32
             "is_weights": is_weights,                     # (B,)
             "sample_locations": sample_locations,         # list[(traj_id, t)]
         }

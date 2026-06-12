@@ -71,3 +71,22 @@ def test_initial_inference_returns_scalar_value():
     h, pi_logits, v = net.initial_inference(obs)
     assert v.shape == (1,)
     assert pi_logits.shape == (1, 12)
+
+
+def test_project_shapes_and_gradients():
+    net = _small_net()
+    obs = torch.rand(4, 4, 96, 96)
+    h = net.representation(obs)
+    proj_target = net.project(h, with_prediction=False)
+    proj_online = net.project(h, with_prediction=True)
+    assert proj_target.shape == proj_online.shape
+    assert proj_target.shape[0] == 4
+    # SimSiam consistency loss backprops through the online branch.
+    loss = -torch.nn.functional.cosine_similarity(
+        proj_online, proj_target.detach(), dim=-1
+    ).mean()
+    loss.backward()
+    pred_grads = [
+        p.grad for p in net.projection_net.predictor.parameters() if p.grad is not None
+    ]
+    assert any(g.abs().sum().item() > 0 for g in pred_grads)

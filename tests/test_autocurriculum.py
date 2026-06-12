@@ -50,6 +50,28 @@ def test_exponent_sharpens():
     assert wh["A"] > ws["A"]
 
 
+def test_completed_levels_downweighted():
+    s = LevelSampler(["A", "B"], history_size=10, exponent=1.0, min_weight=0.0)
+    # Same episode lengths, but A is always completed and B never is.
+    for _ in range(5):
+        s.record_episode("A", 200, completed=True)
+        s.record_episode("B", 200, completed=False)
+    w = s.compute_weights()
+    assert w["B"] > w["A"]
+    # incompletion factors: A=0.05, B=1.05 -> B/A = 21
+    assert pytest.approx(21.0, rel=1e-6) == w["B"] / w["A"]
+    assert pytest.approx(1.0) == sum(w.values())
+
+
+def test_completion_rates_reported():
+    s = LevelSampler(["A", "B"], history_size=4)
+    s.record_episode("A", 100, completed=True)
+    s.record_episode("A", 100, completed=False)
+    rates = s.completion_rates()
+    assert pytest.approx(0.5) == rates["A"]
+    assert rates["B"] == 0.0
+
+
 def test_unobserved_level_uses_fallback_mean():
     s = LevelSampler(["A", "B", "C"], min_weight=0.0)
     for _ in range(5):

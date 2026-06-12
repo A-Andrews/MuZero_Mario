@@ -1,6 +1,7 @@
 """MuZero-Mario training entrypoint."""
 from __future__ import annotations
 
+import math
 import random
 import signal
 import sys
@@ -135,11 +136,22 @@ def main(cfg: DictConfig):
         lr=float(cfg.training.lr),
         weight_decay=float(cfg.training.weight_decay),
     )
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=int(cfg.training.lr_decay_steps),
-        gamma=float(cfg.training.lr_decay_factor),
-    )
+    # Warmup + cosine decay to a floor, then constant at the floor. The
+    # previous StepLR (x0.1 every lr_decay_steps) silently drove the LR to
+    # ~1e-9 on long runs, killing learning entirely.
+    lr_max = float(cfg.training.lr)
+    lr_min = float(cfg.training.get("lr_min", lr_max * 0.1))
+    warmup = max(1, int(cfg.training.get("lr_warmup_steps", 1000)))
+    decay_steps = max(1, int(cfg.training.lr_decay_steps))
+
+    def _lr_lambda(step: int) -> float:
+        if step < warmup:
+            return (step + 1) / warmup
+        frac = min(1.0, (step - warmup) / decay_steps)
+        cos = 0.5 * (1.0 + math.cos(math.pi * frac))
+        return (lr_min + (lr_max - lr_min) * cos) / lr_max
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_lr_lambda)
 
     # --- buffer ---------------------------------------------------------------
     buffer = TrajectoryBuffer(

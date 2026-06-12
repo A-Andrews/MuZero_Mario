@@ -3,11 +3,11 @@
 #SBATCH -J muzero_mario_ac
 #SBATCH -p gpu_a100_80gb
 #SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 8
-#SBATCH --mem-per-gpu 80G
+#SBATCH --cpus-per-gpu 11
+#SBATCH --mem-per-gpu 110G
 #SBATCH -o logs/muzero_mario_ac-%j.out
 #SBATCH -e logs/muzero_mario_ac-%j.err
-#SBATCH --time=48:00:00
+#SBATCH --time=2-12:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=austin.andrews@reuben.ox.ac.uk
 

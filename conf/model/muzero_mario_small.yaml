@@ -1,0 +1,18 @@
+# Throughput-oriented MuZero net for Mario (~10x cheaper than muzero_atari).
+#
+# The full MuZero-Atari tower (256ch, 15 dynamics blocks) was designed for TPU
+# pods; on a single A100 shared between the learner and the MCTS inference
+# server it capped self-play at ~5 env-steps/s. Mario's visuals are far
+# simpler than the Atari-57 suite, so a 128-channel / 6-block dynamics net
+# trades negligible capacity for a large boost in both MCTS inference and
+# learner throughput.
+input_channels: 4
+input_spatial: 96
+hidden_channels: 128
+hidden_spatial: 6
+num_actions: 12
+value_support: [-300, 300, 601]
+reward_support: [-30, 30, 61]
+rep_blocks: [1, 2, 2, 2]
+dyn_blocks: 6
+pred_blocks: 1

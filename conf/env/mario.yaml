@@ -1,0 +1,24 @@
+int_path: ${oc.env:PWD}/mario.stimuli
+levels:
+  - Level1-1
+  - Level1-2
+  - Level1-3
+  - Level2-1
+  - Level2-2
+  - Level2-3
+  - Level3-1
+  - Level3-2
+  - Level3-3
+  - Level4-1
+  - Level4-2
+  - Level4-3
+n_frame_stack: 4
+frame_skip: 4
+pad_to_input_spatial: true
+# Terminate the episode on the first life lost (instead of playing all three
+# lives to game over). Death becomes a true terminal -> crisp credit
+# assignment and shorter, more diverse episodes.
+done_on_life_loss: true
+# Raw reward added when the stage counter advances (level finished), before
+# the /10 scaling — i.e. +10.0 in the agent's reward units.
+completion_bonus: 100.0

@@ -125,9 +125,12 @@ def test_recurrent_inference_matches_direct_net(make_server, wire_dtype, tol):
     assert np.asarray(hn_rem).shape == tuple(hn_ref.shape)
     assert r_rem.shape == v_rem.shape == (1,)
     np.testing.assert_allclose(np.asarray(hn_rem, dtype=np.float32), hn_ref.numpy(), atol=tol)
-    np.testing.assert_allclose(r_rem.numpy(), r_ref.numpy(), atol=1e-4)
-    np.testing.assert_allclose(pl_rem.numpy(), pl_ref.numpy(), atol=1e-4)
-    np.testing.assert_allclose(v_rem.numpy(), v_ref.numpy(), atol=1e-4)
+    # The recurrent path's *input* hidden state crosses the wire, so for
+    # float16 the reward/policy/value heads see a quantised h and the scalar
+    # outputs inherit wire-level error — compare at the wire tolerance.
+    np.testing.assert_allclose(r_rem.numpy(), r_ref.numpy(), atol=tol)
+    np.testing.assert_allclose(pl_rem.numpy(), pl_ref.numpy(), atol=tol)
+    np.testing.assert_allclose(v_rem.numpy(), v_ref.numpy(), atol=tol)
 
 
 def test_mcts_runs_end_to_end_through_server(make_server):

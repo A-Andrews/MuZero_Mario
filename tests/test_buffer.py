@@ -32,6 +32,9 @@ def test_sample_returns_expected_shapes():
     assert batch["rewards"].shape == (7, 3)
     assert batch["policies"].shape == (7, 4, 4)
     assert batch["returns"].shape == (7, 4)
+    assert batch["next_obs"].shape == (7, 3, 4, 8, 8)
+    assert batch["next_obs"].dtype == np.uint8
+    assert batch["next_obs_mask"].shape == (7, 3)
     assert batch["is_weights"].shape == (7,)
 
 

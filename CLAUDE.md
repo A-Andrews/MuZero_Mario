@@ -61,12 +61,20 @@ Environment wrappers (`src/env/`) are ported from `ppo_study` — stable-retro N
 
 ## Config
 
-Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mario` and `model: muzero_atari` defaults. Override anything on the CLI (`section.key=value`). Key knobs:
+Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mario` and `model: muzero_mario_small` defaults (`model: muzero_atari` is the full-size paper net — it capped single-GPU self-play at ~5 env-steps/s, which is why the small net is the default). Override anything on the CLI (`section.key=value`). Key knobs:
 - `selfplay.num_workers` — must fit CPU budget; each worker is a process.
 - `inference_server.{max_batch,max_wait_ms,use_amp}` — throughput vs. latency tradeoff for the batched GPU server.
 - `muzero.{unroll_K,n_step,discount}` — core MuZero hyperparams.
+- `muzero.loss_weight_consistency` — EfficientZero-style SimSiam consistency loss (0 disables): dynamics hidden states are pulled toward stop-grad representations of the real next observations. Big sample-efficiency win since env steps are the bottleneck.
+- `training.max_train_per_env_step` — cap on gradient steps per collected env step (replay-ratio control; also stops the learner from starving the inference server of GPU).
+- `training.{lr,lr_min,lr_warmup_steps,lr_decay_steps}` — warmup + cosine-to-floor LR schedule. **Do not reintroduce multiplicative StepLR decay** — it silently drove the LR to 1e-9 by step 600k on a 2-day run and froze learning.
 - `training.weight_broadcast_every` — how often the learner's weights are pushed into the inference server.
+- `env.done_on_life_loss` — episode ends on first death (true terminal, crisp credit assignment); `env.completion_bonus` — raw reward on stage advance (pre-/10 scaling).
 - `worker.torch_threads` / `learner_torch_threads` — kept at 1 to avoid oversubscription across the worker pool.
+
+## Level-completion tracking
+
+The headline goal is finishing levels. Wandb metrics: `selfplay/completed/<level>` (0/1 per episode), `selfplay/completion_rate_100ep` (rolling, all levels pooled), `autocurriculum/completion_rate/<level>`, and `replay/<level>_completed` per replay checkpoint. The autocurriculum samples levels ∝ inverse-mean-episode-length × incompletion-rate, so mastered levels free up worker time for unfinished ones (`autocurriculum.min_weight` floor guards against forgetting).
 
 ## Logging
 
