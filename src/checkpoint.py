@@ -44,9 +44,13 @@ def load_checkpoint(path, map_location="cpu") -> Dict[str, Any]:
 
 
 def restore_rng(rng_state: Dict[str, Any]):
-    torch.set_rng_state(rng_state["torch_cpu"])
+    cpu_state = rng_state["torch_cpu"]
+    if isinstance(cpu_state, torch.Tensor):
+        cpu_state = cpu_state.cpu()
+    torch.set_rng_state(cpu_state)
     if rng_state.get("torch_cuda") is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
+        cuda_states = [s.cpu() if isinstance(s, torch.Tensor) else s for s in rng_state["torch_cuda"]]
+        torch.cuda.set_rng_state_all(cuda_states)
     np.random.set_state(rng_state["numpy"])
     random.setstate(rng_state["python"])
 
