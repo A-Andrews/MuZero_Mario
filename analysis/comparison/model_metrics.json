@@ -1,0 +1,129 @@
+{
+  "run": "autocurriculum-longdecay",
+  "wandb_file": "outputs/runs/autocurriculum-longdecay/wandb/run-20260619_091106-autocurriculum-longdecay/run-autocurriculum-longdecay.wandb",
+  "env_step": 314560,
+  "wandb_step": 89900,
+  "completion_rate_100ep": 0,
+  "levels": {
+    "Level1-1": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 25.099999999999998,
+      "replay_length": 116,
+      "selfplay_episode_return": 25.400000000000002,
+      "selfplay_episode_length": 117,
+      "mean_length": 685.1136363636364
+    },
+    "Level1-2": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 13.500000000000002,
+      "replay_length": 109,
+      "selfplay_episode_return": 13.500000000000002,
+      "selfplay_episode_length": 109,
+      "mean_length": 394.34
+    },
+    "Level1-3": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 35.000000000000036,
+      "replay_length": 125,
+      "selfplay_episode_return": 35.00000000000003,
+      "selfplay_episode_length": 125,
+      "mean_length": 125.38
+    },
+    "Level2-1": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 40.89999999999999,
+      "replay_length": 141,
+      "selfplay_episode_return": 49.29999999999998,
+      "selfplay_episode_length": 241,
+      "mean_length": 162.2
+    },
+    "Level2-2": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": -7.300000000000077,
+      "replay_length": 2000,
+      "selfplay_episode_return": 32.90000000000002,
+      "selfplay_episode_length": 228,
+      "mean_length": 459.5
+    },
+    "Level2-3": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": -20.899999999999988,
+      "replay_length": 1880,
+      "selfplay_episode_return": 38.099999999999994,
+      "selfplay_episode_length": 142,
+      "mean_length": 227.16
+    },
+    "Level3-1": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 31.499999999999993,
+      "replay_length": 124,
+      "selfplay_episode_return": 31.4,
+      "selfplay_episode_length": 124,
+      "mean_length": 834.8709677419355
+    },
+    "Level3-2": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 43.5,
+      "replay_length": 128,
+      "selfplay_episode_return": 179.40000000000143,
+      "selfplay_episode_length": 1828,
+      "mean_length": 161.94
+    },
+    "Level3-3": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 40.3,
+      "replay_length": 124,
+      "selfplay_episode_return": 40.3,
+      "selfplay_episode_length": 124,
+      "mean_length": 124.94
+    },
+    "Level4-1": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 40.1,
+      "replay_length": 110,
+      "selfplay_episode_return": 40.199999999999996,
+      "selfplay_episode_length": 110,
+      "mean_length": 121.6
+    },
+    "Level4-2": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 26.50000000000003,
+      "replay_length": 126,
+      "selfplay_episode_return": 26.50000000000003,
+      "selfplay_episode_length": 126,
+      "mean_length": 126.78
+    },
+    "Level4-3": {
+      "selfplay_completed": 0,
+      "completion_rate": 0,
+      "replay_completed": 0,
+      "replay_return": 48.099999999999994,
+      "replay_length": 132,
+      "selfplay_episode_return": 46,
+      "selfplay_episode_length": 133,
+      "mean_length": 132.34
+    }
+  }
+}
