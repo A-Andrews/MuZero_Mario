@@ -34,6 +34,9 @@ training:
   # bottleneck.
   max_train_per_env_step: 0.3
   weight_broadcast_every: 100
+  # Sync cadence (train steps) of the lagged target net used for reanalyzed
+  # value bootstraps (muzero.reanalyze).
+  target_update_every: 200
   save_every_train_steps: 5_000
   # A replay rollout is a full greedy-MCTS episode on the GPU and contends
   # with the learner, so it runs on its own (sparser) cadence rather than
@@ -49,12 +52,18 @@ muzero:
   unroll_K: 5
   n_step: 10
   discount: 0.997
-  value_support_min: -300
-  value_support_max: 300
-  value_support_size: 601
-  reward_support_min: -30
-  reward_support_max: 30
-  reward_support_size: 61
+  # Support grids live in *transformed* (signed_hyperbolic) space; model
+  # configs interpolate these values so head sizes always match the loss.
+  # ±25 transformed ≈ ±640 raw return units and ±8 transformed ≈ ±79 raw
+  # reward units — generous headroom for Mario (per-step reward ≤ ~27 even
+  # with completion_bonus 200) at ~25x finer bin resolution than the old
+  # Atari-sized ±300 grid, of which Mario ever used ~25 of 601 bins.
+  value_support_min: -25
+  value_support_max: 25
+  value_support_size: 201
+  reward_support_min: -8
+  reward_support_max: 8
+  reward_support_size: 81
   loss_weight_value: 1.0
   loss_weight_reward: 1.0
   loss_weight_policy: 1.0
@@ -63,9 +72,21 @@ muzero:
   # real next observation). 0 disables. Big sample-efficiency win when
   # env steps, not gradient steps, are the bottleneck.
   loss_weight_consistency: 2.0
+  # Value reanalyze (EfficientZero-style): recompute n-step value targets at
+  # sample time by bootstrapping from a lagged copy of the online network,
+  # instead of the MCTS root values frozen at collection time. With the
+  # ~38x replay ratio those stored bootstraps go stale fast; this keeps value
+  # targets tracking the current network. Costs one extra no-grad
+  # representation forward per unroll position (B*(K+1) obs per batch).
+  reanalyze: true
 
 mcts:
   num_simulations: 32
+  # Leaves selected (with virtual visits) and evaluated per inference round
+  # trip. 1 = fully sequential (paper) search; 4 cuts the synchronous server
+  # round trips per env step from 33 to 9 at a small search-quality cost for
+  # 32-sim trees — the workers' env-steps/s scale almost directly with this.
+  leaf_batch: 4
   pb_c_base: 19652
   pb_c_init: 1.25
   dirichlet_alpha: 0.25
@@ -94,7 +115,10 @@ worker:
   torch_threads: 1
 
 inference_server:
-  max_batch: 64
+  # GPU rows per forward, not requests: a leaf-batched recurrent request
+  # contributes mcts.leaf_batch rows. 20 workers x leaf_batch 4 = 80 rows in
+  # flight worst-case.
+  max_batch: 128
   max_wait_ms: 1.0
   use_amp: true
   # Transport dtype for hidden-state arrays over the worker<->server IPC.
@@ -106,6 +130,11 @@ inference_server:
   # Padding rows are sliced off; replies match the unpadded forward up to
   # float32 rounding (~1e-7), the real rows are mathematically unchanged.
   pad_batches: true
+  # torch.compile for the server net: "off", "default", or "reduce-overhead"
+  # (CUDA graphs). Server forwards are small and launch-bound, so compile can
+  # help a lot — but benchmark one short run before enabling on a long chain,
+  # and keep pad_batches=true so batch shapes stay on the pow-2 buckets.
+  compile: "off"
 
 # Inverse-length autocurriculum across env.levels. Workers sample the next
 # level at every episode boundary from a shared weight vector; weights are

@@ -49,13 +49,13 @@ This is a distributed MuZero implementation. The big-picture flow has three conc
 
 1. **Learner** (main process, GPU): `src/muzero/muzero.py` — `MuzeroLearner` samples from the replay buffer and runs MuZero loss (value + reward + policy, unrolled `K` steps). Networks live in `src/muzero/networks.py` (`MuZeroNet` = representation + dynamics + prediction, with categorical value/reward supports via `src/muzero/transforms.py`).
 
-2. **Self-play workers** (spawned processes, CPU): `src/selfplay/worker.py` runs gym-retro Mario, performs MCTS (`src/muzero/mcts.py`, `src/muzero/node.py`), and emits trajectories. Workers do **not** own a network — every MCTS expansion is an RPC.
+2. **Self-play workers** (spawned processes, CPU): `src/selfplay/worker.py` runs gym-retro Mario, performs MCTS (`src/muzero/mcts.py`, `src/muzero/node.py`), and emits trajectories. Workers do **not** own a network — MCTS expansions are RPCs, batched `mcts.leaf_batch` leaves per round trip via virtual visits. The policy training target is the **raw** visit distribution; the temperature schedule only shapes action selection (do not feed the tempered distribution back as the target).
 
 3. **Inference server** (thread inside the coordinator process, GPU): `src/selfplay/inference_server.py` batches MCTS requests from all workers across a single `mp.Queue`, runs them on GPU (optionally AMP), and replies via per-worker `mp.Pipe`s. Learner weight updates are applied to the server's network *in place* — no pickling through pipes. Cadence is `training.weight_broadcast_every`.
 
 The coordinator (`src/selfplay/coordinator.py`) owns the queues/pipes and wires (1)+(2)+(3) together. It also runs replay-evaluation rollouts (`src/selfplay/replay_eval.py`) at each checkpoint to upload mp4s as `wandb.Video`.
 
-Replay buffer (`src/muzero/buffer.py`) is a prioritized trajectory buffer; targets (n-step value bootstrap, reward sequence, MCTS policy) are computed in `src/muzero/targets.py` with help from `src/muzero/returns.py`. Action-selection temperature schedule lives in `src/muzero/temperature.py`.
+Replay buffer (`src/muzero/buffer.py`) is a prioritized trajectory buffer; ingested trajectories keep the worker-computed per-step priorities. Targets (n-step value bootstrap, reward sequence, MCTS policy) are computed in `src/muzero/targets.py` with help from `src/muzero/returns.py`; with `muzero.reanalyze` on, `build_reanalyze_targets` additionally emits bootstrap observations + discount factors so the learner recomputes value targets against a lagged target net at sample time. Action-selection temperature schedule lives in `src/muzero/temperature.py`.
 
 Environment wrappers (`src/env/`) are ported from `ppo_study` — stable-retro NES emulation (`emulation.py`), Mario action set (`mario_actions.py`), and frame preprocessing (`preprocess.py`). The level list is configured via `env.levels` and corresponds to state files in `mario.stimuli/`.
 
@@ -63,9 +63,12 @@ Environment wrappers (`src/env/`) are ported from `ppo_study` — stable-retro N
 
 Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mario` and `model: muzero_mario_small` defaults (`model: muzero_atari` is the full-size paper net — it capped single-GPU self-play at ~5 env-steps/s, which is why the small net is the default). Override anything on the CLI (`section.key=value`). Key knobs:
 - `selfplay.num_workers` — must fit CPU budget; each worker is a process.
-- `inference_server.{max_batch,max_wait_ms,use_amp}` — throughput vs. latency tradeoff for the batched GPU server.
+- `mcts.leaf_batch` — leaves selected (with virtual visits) and evaluated per inference round trip. 1 = fully-sequential paper search; 4 cuts server round trips per env step from 33 to 9 and is the main self-play throughput lever.
+- `inference_server.{max_batch,max_wait_ms,use_amp}` — throughput vs. latency tradeoff for the batched GPU server. `max_batch` counts GPU **rows**, not requests (a leaf-batched request is `leaf_batch` rows). `inference_server.compile` (`"off"`/`"default"`/`"reduce-overhead"`) torch.compiles the server forwards — benchmark a short run before enabling on a long chain, and keep `pad_batches=true` with it.
 - `muzero.{unroll_K,n_step,discount}` — core MuZero hyperparams.
 - `muzero.loss_weight_consistency` — EfficientZero-style SimSiam consistency loss (0 disables): dynamics hidden states are pulled toward stop-grad representations of the real next observations. Big sample-efficiency win since env steps are the bottleneck.
+- `muzero.reanalyze` — value reanalyze (EfficientZero-style): n-step value targets are recomputed at sample time by bootstrapping from a lagged target net (synced every `training.target_update_every` train steps) instead of the MCTS root values frozen at collection time. Costs B×(K+1) extra no-grad representation forwards per batch.
+- `muzero.{value,reward}_support_*` — support grids live in *transformed* (signed_hyperbolic) space and the model configs interpolate them, so head sizes always match the loss. ±25 value ≈ ±640 raw return, ±8 reward ≈ ±79 raw reward units. Re-check the reward ceiling before raising `env.completion_bonus` past ~500 raw. Changing supports invalidates existing checkpoints (head sizes change).
 - `training.max_train_per_env_step` — cap on gradient steps per collected env step (replay-ratio control; also stops the learner from starving the inference server of GPU).
 - `training.{lr,lr_min,lr_warmup_steps,lr_decay_steps}` — warmup + cosine-to-floor LR schedule. **Do not reintroduce multiplicative StepLR decay** — it silently drove the LR to 1e-9 by step 600k on a 2-day run and froze learning.
 - `training.weight_broadcast_every` — how often the learner's weights are pushed into the inference server.

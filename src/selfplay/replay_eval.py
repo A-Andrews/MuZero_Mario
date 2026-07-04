@@ -32,6 +32,7 @@ def run_replay_rollout(
     max_steps: int = 5000,
     seed: int = 2024,
     bk2_path: Optional[Path] = None,
+    leaf_batch: int = 1,
 ) -> Tuple[List[np.ndarray], float, int, bool]:
     """Return (raw_rgb_frames, total_return, num_env_steps, level_completed).
 
@@ -59,6 +60,7 @@ def run_replay_rollout(
         pb_c_base=pb_c_base,
         pb_c_init=pb_c_init,
         device=device,
+        leaf_batch=leaf_batch,
     )
     network.eval()
 

@@ -38,6 +38,20 @@ def test_sample_returns_expected_shapes():
     assert batch["is_weights"].shape == (7,)
 
 
+def test_sample_reanalyze_keys_and_shapes():
+    buf = TrajectoryBuffer(
+        capacity_transitions=500, unroll_K=3, num_actions=4,
+        reanalyze=True, n_step=5, discount=0.99,
+    )
+    for _ in range(3):
+        buf.add(_make_traj(T=8))
+    batch = buf.sample(batch_size=6, train_step=0)
+    assert batch["value_obs"].shape == (6, 4, 4, 8, 8)  # (B, K+1, C, H, W)
+    assert batch["value_obs"].dtype == np.uint8
+    assert batch["value_obs_factor"].shape == (6, 4)
+    assert batch["reward_window"].shape == (6, 4)
+
+
 def test_priority_update_after_eviction_is_safe():
     buf = TrajectoryBuffer(capacity_transitions=50, unroll_K=2, num_actions=4)
     for _ in range(3):

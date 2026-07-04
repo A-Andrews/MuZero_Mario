@@ -163,6 +163,9 @@ def main(cfg: DictConfig):
         priority_beta_end=float(cfg.buffer.priority_beta_end),
         priority_beta_anneal_steps=int(cfg.buffer.priority_beta_anneal_steps),
         eps_priority=float(cfg.buffer.eps_priority),
+        reanalyze=bool(cfg.muzero.get("reanalyze", False)),
+        n_step=int(cfg.muzero.n_step),
+        discount=float(cfg.muzero.discount),
     )
 
     # --- self-play ------------------------------------------------------------

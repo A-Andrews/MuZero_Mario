@@ -77,3 +77,56 @@ def build_targets(trajectory, t, K, num_actions):
             next_obs_mask[i] = 0.0
 
     return obs, actions, rewards, policies, returns, next_obs, next_obs_mask
+
+
+def build_reanalyze_targets(trajectory, t, K, n_step, discount):
+    """Assemble what the learner needs to recompute fresh n-step value targets
+    at sample time (value reanalyze):
+
+        value_target[k] = reward_window[k]
+                          + value_obs_factor[k] * V_current(value_obs[k])
+
+    for each unroll position s = t+k, k in 0..K, matching the bootstrap
+    semantics of `compute_n_step_returns`:
+      * terminal trajectory: bootstrap at s+n_step if it is still inside the
+        episode, else no bootstrap (terminal value 0);
+      * truncated trajectory: bootstrap at the last *observed* step within the
+        horizon (min(n_step, T-1-s) ahead) at its correct discount;
+      * absorbing positions (s >= T): target 0 (factor 0, empty window).
+
+    Returns:
+        value_obs:        (K+1, C, H, W) uint8 — bootstrap observations
+                          (last real obs where unused)
+        value_obs_factor: (K+1,) float32 — discount^horizon, 0 if no bootstrap
+        reward_window:    (K+1,) float32 — discounted reward sum to the horizon
+    """
+    T = trajectory.length
+    terminal = bool(getattr(trajectory, "terminal", True))
+
+    value_obs = np.empty((K + 1,) + trajectory.obs_stacks.shape[1:], dtype=trajectory.obs_stacks.dtype)
+    value_obs_factor = np.zeros(K + 1, dtype=np.float32)
+    reward_window = np.zeros(K + 1, dtype=np.float32)
+
+    for i in range(K + 1):
+        s = t + i
+        if s >= T:
+            value_obs[i] = trajectory.obs_stacks[T - 1]
+            continue
+        horizon = min(n_step, T - s) if terminal else min(n_step, T - 1 - s)
+        acc = 0.0
+        g = 1.0
+        for j in range(horizon):
+            acc += g * trajectory.rewards[s + j]
+            g *= discount
+        reward_window[i] = acc
+        if terminal:
+            if s + n_step < T:
+                value_obs[i] = trajectory.obs_stacks[s + n_step]
+                value_obs_factor[i] = discount ** n_step
+            else:
+                value_obs[i] = trajectory.obs_stacks[T - 1]
+        else:
+            value_obs[i] = trajectory.obs_stacks[s + horizon]
+            value_obs_factor[i] = discount ** horizon
+
+    return value_obs, value_obs_factor, reward_window

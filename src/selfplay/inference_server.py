@@ -32,6 +32,15 @@ RECURRENT = 1
 SHUTDOWN = 255
 
 
+def _payload_rows(item) -> int:
+    """GPU rows contributed by one request: 1 for an initial-inference obs,
+    m for a leaf-batched recurrent request of m (hidden state, action) rows."""
+    if item[1] != RECURRENT:
+        return 1
+    _h_np, a_np = item[2]
+    return int(np.asarray(a_np).reshape(-1).shape[0])
+
+
 def _build_network(cfg_model: Dict[str, Any]) -> MuZeroNet:
     return MuZeroNet(
         input_channels=cfg_model["input_channels"],
@@ -60,6 +69,7 @@ class InferenceServer:
         amp_dtype: torch.dtype = torch.bfloat16,
         wire_dtype: str = "float32",
         pad_batches: bool = False,
+        compile_mode: str = "off",
     ):
         self.cfg_model = cfg_model
         self.request_queue = request_queue
@@ -86,6 +96,23 @@ class InferenceServer:
         self._net = _build_network(cfg_model).to(device).eval()
         if self.use_amp:
             self._net = self._net.to(memory_format=torch.channels_last)
+
+        # Optional torch.compile of the two inference entry points. The module
+        # itself stays uncompiled so update_weights/load_state_dict keep their
+        # plain state-dict keys; in-place param copies are visible to the
+        # compiled graphs. dynamic=False on purpose: with pad_batches the
+        # batch dim only takes a handful of pow-2 bucket sizes, so per-shape
+        # specialisation beats one dynamic graph.
+        self._initial_fn = self._net.initial_inference
+        self._recurrent_fn = self._net.recurrent_inference
+        if compile_mode and compile_mode != "off" and device.type == "cuda":
+            mode = None if compile_mode == "default" else compile_mode
+            self._initial_fn = torch.compile(
+                self._net.initial_inference, mode=mode, dynamic=False
+            )
+            self._recurrent_fn = torch.compile(
+                self._net.recurrent_inference, mode=mode, dynamic=False
+            )
 
         self._weights_lock = threading.Lock()
         self._pending_sd: Optional[Dict[str, torch.Tensor]] = None
@@ -144,8 +171,11 @@ class InferenceServer:
                 return
 
             batch: List[Tuple[int, int, Any]] = [first]
+            # max_batch counts GPU rows, not requests: a leaf-batched
+            # recurrent request contributes one row per leaf.
+            rows = _payload_rows(first)
             deadline = time.monotonic() + self.max_wait_s
-            while len(batch) < self.max_batch:
+            while rows < self.max_batch:
                 timeout = deadline - time.monotonic()
                 if timeout <= 0:
                     break
@@ -157,6 +187,7 @@ class InferenceServer:
                     self._stop.set()
                     break
                 batch.append(item)
+                rows += _payload_rows(item)
 
             self._run_batch(batch)
 
@@ -173,8 +204,8 @@ class InferenceServer:
         init_idx: List[int] = []
         init_obs: List[np.ndarray] = []
         recur_idx: List[int] = []
-        recur_h: List[np.ndarray] = []
-        recur_a: List[int] = []
+        recur_h: List[np.ndarray] = []   # (m_i, C, H, W) per request
+        recur_a: List[np.ndarray] = []   # (m_i,) per request
 
         for i, (_wid, kind, payload) in enumerate(batch):
             if kind == INITIAL:
@@ -182,9 +213,9 @@ class InferenceServer:
                 init_obs.append(payload)  # np.ndarray (C,H,W) float32
             elif kind == RECURRENT:
                 recur_idx.append(i)
-                h_np, a = payload
-                recur_h.append(h_np)  # np.ndarray (C,H,W) float32
-                recur_a.append(int(a))
+                h_np, a_np = payload
+                recur_h.append(h_np)
+                recur_a.append(np.asarray(a_np, dtype=np.int64).reshape(-1))
 
         amp_ctx = (
             torch.autocast(device_type="cuda", dtype=self.amp_dtype)
@@ -206,7 +237,7 @@ class InferenceServer:
                 if self.use_amp:
                     obs_t = obs_t.contiguous(memory_format=torch.channels_last)
                 with amp_ctx:
-                    h, policy_logits, value = self._net.initial_inference(obs_t)
+                    h, policy_logits, value = self._initial_fn(obs_t)
                 # Drop padding rows before transport (real rows unchanged).
                 h = h[:n]; policy_logits = policy_logits[:n]; value = value[:n]
                 h_np = h.detach().float().cpu().numpy().astype(self._wire_np_dtype, copy=False)
@@ -220,23 +251,26 @@ class InferenceServer:
                     )
 
             if recur_h:
-                n = len(recur_h)
-                h_np_stack = np.stack(recur_h, axis=0)
-                a_list = list(recur_a)
+                sizes = [h.shape[0] for h in recur_h]
+                n = int(sum(sizes))
+                h_np_stack = np.concatenate(recur_h, axis=0)
+                a_np_all = np.concatenate(recur_a, axis=0)
                 bucket = self._bucket_size(n)
                 if bucket > n:
                     h_np_stack = np.concatenate(
                         [h_np_stack, np.repeat(h_np_stack[-1:], bucket - n, axis=0)], axis=0
                     )
-                    a_list = a_list + [a_list[-1]] * (bucket - n)
+                    a_np_all = np.concatenate(
+                        [a_np_all, np.repeat(a_np_all[-1:], bucket - n, axis=0)]
+                    )
                 h_stack = torch.from_numpy(h_np_stack).to(
                     self.device, non_blocking=True
                 ).float()
-                a_stack = torch.tensor(a_list, dtype=torch.long, device=self.device)
+                a_stack = torch.from_numpy(a_np_all).to(self.device)
                 if self.use_amp:
                     h_stack = h_stack.contiguous(memory_format=torch.channels_last)
                 with amp_ctx:
-                    h_next, reward, policy_logits, value = self._net.recurrent_inference(
+                    h_next, reward, policy_logits, value = self._recurrent_fn(
                         h_stack, a_stack
                     )
                 # Drop padding rows before transport (real rows unchanged).
@@ -246,13 +280,16 @@ class InferenceServer:
                 reward_np = reward.float().detach().cpu().numpy()
                 policy_logits_np = policy_logits.float().detach().cpu().numpy()
                 value_np = value.float().detach().cpu().numpy()
-                for j, idx in enumerate(recur_idx):
+                start = 0
+                for idx, sz in zip(recur_idx, sizes):
+                    stop = start + sz
                     replies[idx] = (
-                        h_next_np[j].copy(),
-                        float(reward_np[j]),
-                        policy_logits_np[j].copy(),
-                        float(value_np[j]),
+                        h_next_np[start:stop].copy(),
+                        reward_np[start:stop].copy(),
+                        policy_logits_np[start:stop].copy(),
+                        value_np[start:stop].copy(),
                     )
+                    start = stop
 
         for (wid, kind, _payload), reply in zip(batch, replies):
             try:
@@ -305,17 +342,22 @@ class RemoteNetwork:
         return h, policy_logits_t, value_t
 
     def recurrent_inference(self, h_state, action_tensor: torch.Tensor):
-        # h_state is the numpy (1, C, H, W) array we returned previously — no
-        # torch<->numpy ping-pong. Strip batch dim and ship at the wire dtype.
-        h_np = np.ascontiguousarray(h_state[0], dtype=self._wire_np_dtype)
-        action_idx = int(action_tensor.item())
-        self._q.put((self._wid, RECURRENT, (h_np, action_idx)))
-        h_next_np, reward, policy_logits_np, value = self._recv_reply()
-        h_next = h_next_np[None, ...]
-        reward_t = torch.tensor([reward], dtype=torch.float32)
-        policy_logits_t = torch.from_numpy(policy_logits_np).unsqueeze(0)
-        value_t = torch.tensor([value], dtype=torch.float32)
-        return h_next, reward_t, policy_logits_t, value_t
+        # h_state is a numpy (m, C, H, W) array assembled from hidden states
+        # we returned previously (m = MCTS leaf batch, 1 for sequential
+        # search) — no torch<->numpy ping-pong. The whole leaf batch costs a
+        # single server round trip; it ships at the wire dtype.
+        h_np = np.ascontiguousarray(h_state, dtype=self._wire_np_dtype)
+        actions_np = np.asarray(
+            action_tensor.detach().cpu().numpy(), dtype=np.int64
+        ).reshape(-1)
+        self._q.put((self._wid, RECURRENT, (h_np, actions_np)))
+        h_next_np, reward_np, policy_logits_np, value_np = self._recv_reply()
+        return (
+            h_next_np,                          # (m, C, H, W) wire dtype
+            torch.from_numpy(reward_np),        # (m,) float32
+            torch.from_numpy(policy_logits_np), # (m, A) float32
+            torch.from_numpy(value_np),         # (m,) float32
+        )
 
     def _recv_reply(self):
         try:

@@ -133,6 +133,40 @@ def test_recurrent_inference_matches_direct_net(make_server, wire_dtype, tol):
     np.testing.assert_allclose(v_rem.numpy(), v_ref.numpy(), atol=tol)
 
 
+@pytest.mark.parametrize("wire_dtype,tol", [("float32", 1e-4), ("float16", 3e-3)])
+def test_leaf_batched_recurrent_matches_direct_net(make_server, wire_dtype, tol):
+    """A leaf-batched recurrent request (m rows in one round trip) must return
+    the same numbers as the direct net evaluated on the same batch."""
+    h = make_server(wire_dtype)
+    net, remote = h.net, h.remote
+    obs = torch.rand(3, 4, 96, 96)
+    h_ref, _, _ = net.initial_inference(obs)
+    actions = torch.tensor([3, 0, 7], dtype=torch.long)
+
+    hn_ref, r_ref, pl_ref, v_ref = net.recurrent_inference(h_ref, actions)
+    hn_rem, r_rem, pl_rem, v_rem = remote.recurrent_inference(h_ref.numpy(), actions)
+
+    assert np.asarray(hn_rem).shape == tuple(hn_ref.shape)
+    assert r_rem.shape == v_rem.shape == (3,)
+    assert pl_rem.shape == pl_ref.shape
+    np.testing.assert_allclose(np.asarray(hn_rem, dtype=np.float32), hn_ref.numpy(), atol=tol)
+    np.testing.assert_allclose(r_rem.numpy(), r_ref.numpy(), atol=tol)
+    np.testing.assert_allclose(pl_rem.numpy(), pl_ref.numpy(), atol=tol)
+    np.testing.assert_allclose(v_rem.numpy(), v_ref.numpy(), atol=tol)
+
+
+def test_mcts_leaf_batched_end_to_end_through_server(make_server):
+    remote = make_server("float32").remote
+    mcts = MCTS(
+        discount=0.99, num_simulations=12, root_dirichlet_alpha=0.0,
+        device="cpu", leaf_batch=4,
+    )
+    obs = np.random.rand(4, 96, 96).astype(np.float32)
+    action, pi, q = mcts.run(obs, remote, temperature=1.0, deterministic=False)
+    assert 0 <= action < CFG_MODEL["num_actions"]
+    assert np.isclose(pi.sum(), 1.0, atol=1e-5)
+
+
 def test_mcts_runs_end_to_end_through_server(make_server):
     """MCTS treats the hidden state opaquely; a full search through the remote
     network must still produce a valid visit-count policy."""
@@ -190,7 +224,7 @@ def test_padded_batch_is_numerically_identical_to_unpadded():
     with torch.no_grad():
         h0, _, _ = base_net.initial_inference(torch.from_numpy(obs[0]).unsqueeze(0))
     h_payloads = [
-        (h0[0].numpy().astype(np.float32), a) for a in (2, 7)
+        (h0.numpy().astype(np.float32), np.array([a], dtype=np.int64)) for a in (2, 7)
     ]
     batch = [(0, INITIAL, o) for o in obs] + [(0, RECURRENT, hp) for hp in h_payloads]
 

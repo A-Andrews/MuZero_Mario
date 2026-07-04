@@ -65,6 +65,7 @@ class SelfPlayCoordinator:
             use_amp=bool(cfg.get("inference_server", {}).get("use_amp", True)),
             wire_dtype=str(cfg.get("inference_server", {}).get("wire_dtype", "float32")),
             pad_batches=bool(cfg.get("inference_server", {}).get("pad_batches", False)),
+            compile_mode=str(cfg.get("inference_server", {}).get("compile", "off")),
         )
         if initial_state_dict is not None:
             # Pre-load learner weights so workers never see the server's

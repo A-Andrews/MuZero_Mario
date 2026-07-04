@@ -109,6 +109,7 @@ def selfplay_worker(
         pb_c_base=cfg["mcts"]["pb_c_base"],
         pb_c_init=cfg["mcts"]["pb_c_init"],
         device=device,
+        leaf_batch=int(cfg["mcts"].get("leaf_batch", 1)),
     )
 
     temperature_schedule = list(cfg["selfplay"]["temperature_schedule"])
@@ -216,4 +217,5 @@ def _finalise_trajectory(
         returns=returns,
         priorities=priorities,
         level=level,
+        terminal=bool(terminal),
     )

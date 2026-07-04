@@ -92,20 +92,18 @@ class _BatchPrefetcher:
                 self._request_step = None
             try:
                 batch_np = self._buffer.sample(self._batch_size, step)
-                tensors = {
-                    "obs": torch.from_numpy(batch_np["obs"]),
-                    "actions": torch.from_numpy(batch_np["actions"]),
-                    "rewards": torch.from_numpy(batch_np["rewards"]),
-                    "policies": torch.from_numpy(batch_np["policies"]),
-                    "returns": torch.from_numpy(batch_np["returns"]),
-                    "next_obs": torch.from_numpy(batch_np["next_obs"]),
-                    "next_obs_mask": torch.from_numpy(batch_np["next_obs_mask"]),
-                    "is_weights": torch.from_numpy(batch_np["is_weights"]),
-                }
-                if self._pin:
-                    for k in tensors:
-                        tensors[k] = tensors[k].pin_memory()
-                tensors["sample_locations"] = batch_np["sample_locations"]
+                # Convert every ndarray in the sample generically (the key set
+                # depends on buffer options, e.g. reanalyze); non-arrays such
+                # as sample_locations pass through untouched.
+                tensors = {}
+                for k, v in batch_np.items():
+                    if isinstance(v, np.ndarray):
+                        t = torch.from_numpy(v)
+                        if self._pin:
+                            t = t.pin_memory()
+                        tensors[k] = t
+                    else:
+                        tensors[k] = v
             except BaseException as e:
                 with self._cv:
                     self._error = e
@@ -172,6 +170,14 @@ class MuzeroLearner:
         self.loss_w_c = float(m.get("loss_weight_consistency", 0.0))
         self.value_support = (float(m["value_support_min"]), float(m["value_support_max"]), int(m["value_support_size"]))
         self.reward_support = (float(m["reward_support_min"]), float(m["reward_support_max"]), int(m["reward_support_size"]))
+        # Value reanalyze: recompute n-step value targets at sample time with
+        # a lagged copy of the online network instead of the root values
+        # frozen at collection time. The target net is (re)synced from the
+        # online net every `training.target_update_every` train steps.
+        self.reanalyze = bool(m.get("reanalyze", False))
+        self.target_update_every = max(1, int(tr.get("target_update_every", 200)))
+        self._target_net: Optional[MuZeroNet] = None
+        self._target_synced_at = -(10 ** 9)
 
         self.use_amp = (device.type == "cuda")
         self.amp_dtype = torch.bfloat16
@@ -324,7 +330,23 @@ class MuzeroLearner:
 
     # -- one gradient step ----------------------------------------------------
 
+    def _maybe_refresh_target(self):
+        """(Re)sync the reanalyze target net from the online net on cadence."""
+        if not self.reanalyze:
+            return
+        if (
+            self._target_net is not None
+            and self.training_step - self._target_synced_at < self.target_update_every
+        ):
+            return
+        if self._target_net is None:
+            self._target_net = self._build_replay_net()
+        self._target_net.load_state_dict(self.net.state_dict())
+        self._target_net.eval()
+        self._target_synced_at = self.training_step
+
     def _train_step(self) -> Dict[str, float]:
+        self._maybe_refresh_target()
         batch = self._prefetcher.get()
         # Immediately queue the next batch so CPU sampling overlaps GPU compute.
         self._prefetcher.request(self.training_step + 1)
@@ -349,6 +371,28 @@ class MuzeroLearner:
         )
 
         with amp_ctx:
+            # Value reanalyze: replace the collection-time returns with fresh
+            # n-step targets bootstrapped from the (lagged) target network:
+            #   z_k = reward_window_k + factor_k * V_target(obs at bootstrap)
+            # reward_window / factor come precomputed from the buffer with the
+            # right terminal/truncation semantics; factor is 0 past terminals.
+            if self.reanalyze:
+                value_obs = batch["value_obs"].to(self.device, non_blocking=pin)
+                value_obs_factor = batch["value_obs_factor"].to(self.device, non_blocking=pin)
+                reward_window = batch["reward_window"].to(self.device, non_blocking=pin)
+                B = value_obs.shape[0]
+                flat_vobs = value_obs.reshape(B * (self.K + 1), *value_obs.shape[2:])
+                flat_vobs = flat_vobs.float().div_(255.0)
+                if self.use_amp:
+                    flat_vobs = flat_vobs.contiguous(memory_format=torch.channels_last)
+                with torch.no_grad():
+                    h_boot = self._target_net.representation(flat_vobs)
+                    _, v_boot_logits = self._target_net.prediction(h_boot)
+                    v_boot = support_to_scalar(
+                        v_boot_logits.float(), *self.value_support
+                    ).reshape(B, self.K + 1)
+                returns = reward_window + value_obs_factor * v_boot
+
             # Initial step: representation + prediction
             h, policy_logits, value_logits = self.net.initial_step(obs)
             # support_to_scalar runs in fp32 for a stable priority signal.
@@ -613,6 +657,7 @@ class MuzeroLearner:
                         max_steps=self.replay_max_steps,
                         seed=int(self.cfg["seed"]) + 777,
                         bk2_path=video_step_dir / f"{level}.bk2",
+                        leaf_batch=int(mcts_cfg.get("leaf_batch", 1)),
                     )
                     mp4_path = video_step_dir / f"{level}.mp4"
                     save_video(mp4_path, frames, fps=video_fps)
