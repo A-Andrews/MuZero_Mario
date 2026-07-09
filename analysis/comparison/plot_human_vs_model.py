@@ -1,19 +1,16 @@
-"""Compare the current-best MuZero agent against human players, per level.
+"""Compare human players against one or more MuZero runs, per level.
 
-Inputs (both produced by replaying gameplay through the *same* stable-retro env):
-  - analysis/comparison/human_attempts.csv   (scripts/replay_human_bk2.sh)
-  - analysis/comparison/model_progress.json   (scripts/model_rollout_progress.sh)
+Inputs (all produced by replaying gameplay through the *same* stable-retro env):
+  - analysis/comparison/human_attempts.csv        (scripts/replay_human_bk2.sh)
+  - analysis/comparison/model_progress*.json       (scripts/model_rollout_*.sh)
 
-Three panels, directly comparable (same emulator, same world-x, same in-game
-score, same clear criterion):
+Each `model_progress*.json` listed in MODEL_SPECS becomes its own bar group, so
+several training runs can be compared side by side. Three panels:
   A. Completion rate per level  — fraction of attempts that reach the flagpole.
   B. Level progress reached (%)  — max world-x reached / level length (flagpole x).
-  C. In-game score              — peak SMB score in an attempt (coins, enemies,
-                                   time/flag bonus on a clear).
+  C. In-game score              — peak SMB score in an attempt.
 
-Bars are means; the small dots on each human bar are individual subjects (the
-agent has one deterministic rollout, so no spread). Humans get many attempts
-per level (a .bk2 may span several lives); the agent dies on its first life.
+Bars are means; the coloured dots on each human bar are individual subjects.
 """
 from __future__ import annotations
 
@@ -27,16 +24,23 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 
 REPO = Path(__file__).resolve().parents[2]
 HUMAN_CSV = REPO / "analysis/comparison/human_attempts.csv"
-MODEL_JSON = REPO / "analysis/comparison/model_progress.json"
 OUT_DIR = REPO / "analysis/comparison"
 LEVELS = [f"Level{w}-{s}" for w in range(1, 5) for s in range(1, 4)]
 
+# (label, progress-json, bar colour). Missing files are skipped.
+MODEL_SPECS = [
+    ("longdecay (small net)", OUT_DIR / "model_progress.json", "#e31a1c"),
+    ("medium50 (medium net)", OUT_DIR / "model_progress_medium50.json", "#33a02c"),
+    ("medium50-v2 (overhaul)", OUT_DIR / "model_progress_medium50v2.json", "#1f78b4"),
+]
+HUMAN_BAR = "#a6cee3"
+
 
 def load_human():
-    """Return (per-level aggregate df, per-(subject,level) df, level_len dict)."""
     df = pd.read_csv(HUMAN_CSV)
     df = df[df.get("error").isna()] if "error" in df.columns else df
     df = df[df["level"].isin(LEVELS)].copy()
@@ -53,7 +57,6 @@ def load_human():
         lambda r: min(r["max_x"] / level_len[r["level"]], 1.0) if level_len.get(r["level"]) else np.nan,
         axis=1,
     )
-
     per_subj = (
         df.groupby(["subject", "level"], observed=True)
         .agg(clear=("completed", "mean"), prog=("progress", "mean"),
@@ -73,11 +76,11 @@ def load_human():
             "h_score_sd": g["score"].std(ddof=0) if len(g) else np.nan,
             "h_attempts": int(df[df["level"] == lv].shape[0]),
         })
-    return pd.DataFrame(rows), per_subj, level_len
+    return pd.DataFrame(rows).set_index("level"), per_subj, level_len
 
 
-def load_model(level_len: dict):
-    data = json.loads(MODEL_JSON.read_text())
+def load_model(json_path, level_len):
+    data = json.loads(Path(json_path).read_text())
     step = data.get("step")
     if step is None:
         ckpt = data.get("checkpoint", "")
@@ -94,88 +97,116 @@ def load_model(level_len: dict):
         prog = (min(m.get("max_x", 0) / ln, 1.0) if ln and m.get("max_x") is not None else np.nan)
         score = m.get("score")
         rows.append({"level": lv,
-                     "m_clear": float(m.get("completed", 0) or 0),
-                     "m_prog": prog,
-                     "m_score": float(score) if score is not None else np.nan})
-    return pd.DataFrame(rows), step
+                     "clear": float(m.get("completed", 0) or 0),
+                     "prog": prog,
+                     "score": float(score) if score is not None else np.nan})
+    return pd.DataFrame(rows).set_index("level").reindex(LEVELS), step
 
 
-def _dots(ax, per_subj, level_col, xcenter, scale=1.0):
-    """Scatter individual-subject values as jittered dots on a human bar."""
-    rng = np.random.default_rng(0)
-    for xi, lv in zip(xcenter, LEVELS):
-        vals = per_subj.loc[per_subj["level"] == lv, level_col].dropna().to_numpy() * scale
-        if len(vals) == 0:
-            continue
-        jit = (rng.random(len(vals)) - 0.5) * 0.18
-        ax.scatter(np.full(len(vals), xi) + jit, vals, s=16, c="black",
-                   alpha=0.65, zorder=5, edgecolors="none")
+def _dots(ax, per_subj, col, xpos, subjects, sub_colors, scale=1.0):
+    """Individual-subject dots on each human bar, coloured by subject."""
+    n = len(subjects)
+    offsets = np.linspace(-0.16, 0.16, n) if n > 1 else np.array([0.0])
+    bw = (xpos[1] - xpos[0]) if len(xpos) > 1 else 1.0
+    for off, sub in zip(offsets, subjects):
+        sd = per_subj[per_subj["subject"] == sub].set_index("level")
+        xs, ys = [], []
+        for xi, lv in zip(xpos, LEVELS):
+            if lv in sd.index:
+                v = sd.loc[lv, col]
+                if not (isinstance(v, float) and np.isnan(v)):
+                    xs.append(xi + off * 0.45 * bw / 0.16)
+                    ys.append(v * scale)
+        ax.scatter(xs, ys, s=18, color=sub_colors[sub], edgecolors="white",
+                   linewidths=0.4, zorder=6)
 
 
 def main():
     human, per_subj, level_len = load_human()
-    model, mstep = load_model(level_len)
-    tab = human.merge(model, on="level")
-    tab["level"] = pd.Categorical(tab["level"], categories=LEVELS, ordered=True)
-    tab = tab.sort_values("level").reset_index(drop=True)
-    tab.to_csv(OUT_DIR / "human_vs_model_per_level.csv", index=False)
-    print(tab[["level", "h_clear", "m_clear", "h_prog", "m_prog",
-               "h_score", "m_score", "h_attempts"]].to_string(index=False))
+    models = []
+    for name, path, color in MODEL_SPECS:
+        if Path(path).exists():
+            df, step = load_model(path, level_len)
+            models.append(dict(name=name, df=df, step=step, color=color))
+    print(f"models: {[(m['name'], m['step']) for m in models]}")
+
+    # combined CSV for reference
+    out = human.copy()
+    for m in models:
+        tag = m["name"].split()[0]
+        for c in ("clear", "prog", "score"):
+            out[f"{tag}_{c}"] = m["df"][c]
+    out.to_csv(OUT_DIR / "human_vs_model_per_level.csv")
 
     x = np.arange(len(LEVELS))
-    w = 0.4
-    hx, mx = x - w / 2, x + w / 2
-    hc, mc = "#1f77b4", "#d62728"
-    fig, (axA, axB, axC) = plt.subplots(3, 1, figsize=(13, 11), sharex=True)
+    nbars = 1 + len(models)
+    gw = 0.82
+    bw = gw / nbars
+    def pos(j):  # bar slot j: 0 = human, 1.. = models
+        return x - gw / 2 + bw * (j + 0.5)
+    hpos = pos(0)
+
+    subjects = sorted(per_subj["subject"].dropna().unique())
+    scmap = plt.get_cmap("Dark2")
+    sub_colors = {s: scmap(i % 8) for i, s in enumerate(subjects)}
+
+    fig, (axA, axB, axC) = plt.subplots(3, 1, figsize=(14, 11), sharex=True)
+
+    def draw(ax, hcol, hsd, mcol, scale, label_fmt):
+        ax.bar(hpos, human[hcol] * scale, bw,
+               yerr=(human[hsd] * scale if hsd else None), capsize=3,
+               color=HUMAN_BAR, label="Human", zorder=2)
+        for i, m in enumerate(models):
+            vals = m["df"][mcol] * scale
+            ax.bar(pos(i + 1), vals, bw, color=m["color"], zorder=2,
+                   label=f"{m['name']}  (step {m['step']:,})" if m["step"] else m["name"])
+            for xi, v in zip(pos(i + 1), vals):
+                if not np.isnan(v):
+                    ax.text(xi, v + ax.get_ylim()[1] * 0.012, label_fmt(v),
+                            ha="center", va="bottom", fontsize=6.5, color=m["color"], rotation=90)
 
     # A. completion rate
-    axA.bar(hx, tab["h_clear"], w, yerr=tab["h_clear_sd"], capsize=3, color=hc, label="Human (bar = mean)")
-    axA.bar(mx, tab["m_clear"], w, color=mc, label="MuZero")
-    _dots(axA, per_subj, "clear", hx)
+    draw(axA, "h_clear", "h_clear_sd", "clear", 1.0, lambda v: f"{v:.0%}")
+    _dots(axA, per_subj, "clear", hpos, subjects, sub_colors)
     axA.set_ylabel("Completion rate\n(fraction of attempts)")
-    axA.set_ylim(0, 1.05)
+    axA.set_ylim(0, 1.08)
     axA.set_title("A. Level completion rate — reaches the flagpole")
-    axA.legend(loc="upper right")
-    for xi, mv in zip(mx, tab["m_clear"]):
-        axA.text(xi, 0.02, f"{mv:.0%}", ha="center", va="bottom", fontsize=7, color=mc)
+    bar_leg = axA.legend(loc="upper right", fontsize=8)
+    axA.add_artist(bar_leg)
+    sub_handles = [Line2D([0], [0], marker="o", linestyle="", markersize=6,
+                          markerfacecolor=sub_colors[s], markeredgecolor="white", label=s)
+                   for s in subjects]
+    axA.legend(handles=sub_handles, loc="upper left", ncol=len(subjects),
+               fontsize=8, title="individual subjects", title_fontsize=8)
 
     # B. progress
-    axB.bar(hx, tab["h_prog"] * 100, w, yerr=tab["h_prog_sd"] * 100, capsize=3, color=hc, label="Human")
-    axB.bar(mx, tab["m_prog"] * 100, w, color=mc, label="MuZero")
-    _dots(axB, per_subj, "prog", hx, scale=100.0)
+    draw(axB, "h_prog", "h_prog_sd", "prog", 100.0, lambda v: f"{v:.0f}%")
+    _dots(axB, per_subj, "prog", hpos, subjects, sub_colors, scale=100.0)
     axB.set_ylabel("Level progress reached\n(% of distance to flag)")
-    axB.set_ylim(0, 105)
+    axB.set_ylim(0, 112)
     axB.set_title("B. How far through the level each gets")
-    axB.legend(loc="upper right")
-    for xi, mv in zip(mx, tab["m_prog"]):
-        if not np.isnan(mv):
-            axB.text(xi, mv * 100 + 1, f"{mv:.0%}", ha="center", va="bottom", fontsize=7, color=mc)
+    axB.legend(loc="upper right", fontsize=8)
 
     # C. score
-    axC.bar(hx, tab["h_score"], w, yerr=tab["h_score_sd"], capsize=3, color=hc, label="Human")
-    axC.bar(mx, tab["m_score"], w, color=mc, label="MuZero")
-    _dots(axC, per_subj, "score", hx)
+    draw(axC, "h_score", "h_score_sd", "score", 1.0, lambda v: f"{int(v)}")
+    _dots(axC, per_subj, "score", hpos, subjects, sub_colors)
     axC.set_ylabel("In-game score\n(peak per attempt)")
     axC.set_title("C. Total in-game score")
-    axC.legend(loc="upper right")
+    axC.legend(loc="upper right", fontsize=8)
     axC.set_xticks(x)
     axC.set_xticklabels(LEVELS, rotation=45, ha="right")
-    for xi, mv in zip(mx, tab["m_score"]):
-        if mv is not None and not (isinstance(mv, float) and np.isnan(mv)):
-            axC.text(xi, mv + axC.get_ylim()[1] * 0.01, f"{int(mv)}", ha="center", va="bottom", fontsize=7, color=mc)
 
     for ax in (axA, axB, axC):
         ax.grid(axis="y", alpha=0.3)
-        for xi, n in zip(x, tab["h_attempts"]):
+        for xi, n in zip(x, human["h_attempts"]):
             if n == 0:
                 ax.text(xi, ax.get_ylim()[1] * 0.5, "no human data", rotation=90,
                         ha="center", va="center", fontsize=8, color="0.5", style="italic")
 
-    step_lbl = f"step {mstep:,}" if mstep else "current-best checkpoint"
-    fig.suptitle(f"Human players vs MuZero agent, per level  (agent {step_lbl})", fontsize=14)
+    fig.suptitle("Human players vs MuZero runs, per level", fontsize=14)
     fig.text(0.5, 0.005,
-             "Human = CNeuroMod players (bars = mean over subjects ± SD; dots = individual subjects; many attempts/level). "
-             "MuZero = greedy-MCTS rollout of the current-best checkpoint. Both replayed through the same stable-retro env.",
+             "Human = CNeuroMod players (bars = mean over subjects ± SD; dots = individual subjects). "
+             "MuZero = greedy-MCTS rollout of each run's latest checkpoint. All replayed through the same stable-retro env.",
              ha="center", fontsize=8, style="italic")
     fig.tight_layout(rect=(0, 0.025, 1, 0.97))
     png = OUT_DIR / "human_vs_model_per_level.png"

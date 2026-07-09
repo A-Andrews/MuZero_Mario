@@ -69,8 +69,10 @@ def replay_bk2(bk2_path: str, int_path: str) -> dict:
             max_score = max(max_score, int(info.get("score", 0)))
             if int(info.get("lives", 0)) == -1:
                 game_over = True
-            if completed or game_over:
                 break
+            # NB: do not break on `completed` — the flagpole + time bonus is
+            # tallied over the ~650 recorded frames *after* the flag is grabbed,
+            # so we must replay to the movie's end to capture the real score.
 
         return {
             "level": level_from_name(bk2_path),
