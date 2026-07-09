@@ -4,9 +4,9 @@ Stores full episode trajectories. Pre-stacked observations are kept as uint8
 (cheap compared to float32) and converted to float32/[0,1] at sample-assembly
 time.
 
-Priority formula (matches Muzero-Hanoi): |v_pred - return|^alpha. Initial
-priority when a trajectory is ingested is the maximum priority currently in
-the buffer (so new trajectories are likely to be sampled at least once).
+Priority formula (matches Muzero-Hanoi): |v_pred - return|^alpha. Ingested
+trajectories keep the per-step priorities computed by the self-play worker
+(|n-step return - MCTS root value|), floored at eps.
 
 Sampling uses a cached flat priority array indexed by (traj_id, t). The cache
 is rebuilt only on add/evict; `update_priorities` edits the cache in place.
@@ -21,7 +21,7 @@ from typing import Deque, Dict, List, Tuple
 
 import numpy as np
 
-from src.muzero.targets import build_targets
+from src.muzero.targets import build_reanalyze_targets, build_targets
 
 
 @dataclass
@@ -34,6 +34,10 @@ class Trajectory:
     returns: np.ndarray      # (T,) float32
     priorities: np.ndarray   # (T,) float32
     level: str = ""
+    # True when the episode ended on a real terminal (death / completion),
+    # False when it was truncated (max_trajectory_length). Decides the
+    # bootstrap semantics of reanalyzed value targets.
+    terminal: bool = True
 
     @property
     def length(self) -> int:
@@ -51,6 +55,9 @@ class TrajectoryBuffer:
         priority_beta_end: float = 1.0,
         priority_beta_anneal_steps: int = 500_000,
         eps_priority: float = 1e-3,
+        reanalyze: bool = False,
+        n_step: int = 0,
+        discount: float = 1.0,
     ):
         self.capacity = capacity_transitions
         self.K = unroll_K
@@ -60,6 +67,12 @@ class TrajectoryBuffer:
         self.beta_end = priority_beta_end
         self.beta_anneal = priority_beta_anneal_steps
         self.eps = eps_priority
+        # When True, sample() additionally emits the bootstrap observations /
+        # discount factors / reward windows the learner needs to recompute
+        # n-step value targets with a fresh network (value reanalyze).
+        self.reanalyze = bool(reanalyze)
+        self.n_step = int(n_step)
+        self.discount = float(discount)
 
         self.trajectories: Dict[int, Trajectory] = {}
         self._ids: Deque[int] = deque()
@@ -87,11 +100,11 @@ class TrajectoryBuffer:
     # -- add / evict ---------------------------------------------------------
 
     def add(self, traj: Trajectory):
-        # New trajectories enter at the current max priority so they are
-        # guaranteed to be sampled at least once before competing on TD error.
-        if self._ids:
-            init_prio = max(self._max_priority, self.eps)
-            traj.priorities = np.full_like(traj.priorities, init_prio)
+        # Keep the worker-computed per-step priorities (|n-step return − MCTS
+        # root value|, as in the MuZero paper) so the first pass over a new
+        # trajectory targets the actually-surprising steps; only floor them at
+        # eps so every step stays sampleable.
+        traj.priorities = np.maximum(traj.priorities, self.eps)
 
         tid = self._next_id
         self._next_id += 1
@@ -168,12 +181,14 @@ class TrajectoryBuffer:
         picked_ts = self._flat_positions[chosen]
 
         obs_batch, act_batch, rew_batch, pol_batch, ret_batch = [], [], [], [], []
+        nobs_batch, nmask_batch = [], []
+        vobs_batch, vfac_batch, rwin_batch = [], [], []
         sample_locations: List[Tuple[int, int]] = []
         for i in range(batch_size):
             tid = int(picked_tids[i])
             t = int(picked_ts[i])
             traj = self.trajectories[tid]
-            obs, actions, rewards, policies, returns = build_targets(
+            obs, actions, rewards, policies, returns, next_obs, next_obs_mask = build_targets(
                 traj, t, self.K, self.num_actions
             )
             # obs is uint8 (C, H, W); normalise here on the single fresh copy.
@@ -182,17 +197,36 @@ class TrajectoryBuffer:
             rew_batch.append(rewards)
             pol_batch.append(policies)
             ret_batch.append(returns)
+            # next_obs stays uint8 — it is K× the size of obs, so it ships to
+            # the GPU compact and is normalised there.
+            nobs_batch.append(next_obs)
+            nmask_batch.append(next_obs_mask)
+            if self.reanalyze:
+                v_obs, v_fac, r_win = build_reanalyze_targets(
+                    traj, t, self.K, self.n_step, self.discount
+                )
+                vobs_batch.append(v_obs)
+                vfac_batch.append(v_fac)
+                rwin_batch.append(r_win)
             sample_locations.append((tid, t))
 
-        return {
+        out = {
             "obs": np.stack(obs_batch, axis=0),          # (B, C, H, W) float32
             "actions": np.stack(act_batch, axis=0),       # (B, K)
             "rewards": np.stack(rew_batch, axis=0),       # (B, K)
             "policies": np.stack(pol_batch, axis=0),      # (B, K+1, A)
             "returns": np.stack(ret_batch, axis=0),       # (B, K+1)
+            "next_obs": np.stack(nobs_batch, axis=0),     # (B, K, C, H, W) uint8
+            "next_obs_mask": np.stack(nmask_batch, axis=0),  # (B, K) float32
             "is_weights": is_weights,                     # (B,)
             "sample_locations": sample_locations,         # list[(traj_id, t)]
         }
+        if self.reanalyze:
+            # uint8 like next_obs — normalised on the GPU by the learner.
+            out["value_obs"] = np.stack(vobs_batch, axis=0)          # (B, K+1, C, H, W)
+            out["value_obs_factor"] = np.stack(vfac_batch, axis=0)   # (B, K+1)
+            out["reward_window"] = np.stack(rwin_batch, axis=0)      # (B, K+1)
+        return out
 
     def update_priorities(self, sample_locations: List[Tuple[int, int]], new_priorities: np.ndarray):
         """Update priorities at sampled locations with fresh |v_pred - target| values.

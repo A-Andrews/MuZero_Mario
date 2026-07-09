@@ -4,10 +4,12 @@ Changes vs reference:
 - `network.initial_inference(obs)` is expected to return (h_state_tensor,
   policy_logits_tensor, value_scalar_tensor) — we softmax the logits and numpy-ify
   here.
-- `network.recurrent_inference(h_state_tensor, action_idx_tensor)` returns
-  (h_next_tensor, reward_scalar_tensor, policy_logits_tensor, value_scalar_tensor).
+- `network.recurrent_inference(h_batch, action_idx_tensor)` is batched over m
+  leaves: h_batch is (m, C, H, W), actions (m,), and it returns
+  (h_next (m, C, H, W), reward (m,), policy_logits (m, A), value (m,)).
 - hidden state stays as a CPU/GPU torch.Tensor on the device the network lives
-  on (no numpy<->tensor ping-pong).
+  on (no numpy<->tensor ping-pong); through the inference-server adapter it is
+  an opaque numpy array instead.
 """
 import numpy as np
 import torch
@@ -27,6 +29,7 @@ class MCTS:
         pb_c_base=19652,
         pb_c_init=1.25,
         device="cpu",
+        leaf_batch=1,
     ):
         self.discount = discount
         self.num_simulations = num_simulations
@@ -35,6 +38,10 @@ class MCTS:
         self.pb_c_base = pb_c_base
         self.pb_c_init = pb_c_init
         self.device = device
+        # Leaves selected (with virtual visits) and evaluated per network
+        # round trip. 1 reproduces fully-sequential search; >1 amortises the
+        # inference-server round-trip latency over several simulations.
+        self.leaf_batch = max(1, int(leaf_batch))
 
     @torch.inference_mode()
     def run(self, obs_np, network, temperature=1.0, deterministic=False):
@@ -46,8 +53,9 @@ class MCTS:
             temperature: softmax temperature on visit counts.
             deterministic: if True, bypass Dirichlet noise and argmax visit counts.
         Returns:
-            (action, pi_prob, root_Q) — action int, numpy visit-count distribution,
-            root mean action-value.
+            (action, pi_prob, root_Q) — action int, numpy visit-count
+            distribution (raw, un-tempered — this is the policy training
+            target), root mean action-value.
         """
         min_max_stats = MinMaxStats()
 
@@ -65,31 +73,81 @@ class MCTS:
         # seeded with a finite range.
         root.backup(root_value, self, min_max_stats)
 
-        for _ in range(self.num_simulations):
-            node = root
-            while node.is_expanded:
-                node = node.best_child(self, min_max_stats)
+        sims_done = 0
+        while sims_done < self.num_simulations:
+            m = min(self.leaf_batch, self.num_simulations - sims_done)
 
-            parent_h = node.parent.h_state
-            action_tensor = torch.tensor([node.move], dtype=torch.long, device=self.device)
-            h_next, reward, policy_logits, value = network.recurrent_inference(parent_h, action_tensor)
-            child_prior = F.softmax(policy_logits, dim=-1).squeeze(0).detach().cpu().numpy().astype(np.float32)
-            reward_val = float(reward.squeeze(0).detach().cpu().item())
-            value_val = float(value.squeeze(0).detach().cpu().item())
+            # Select m leaves; after each selection, pin the path with a
+            # virtual visit (N only, no value) so the next selection in this
+            # round is steered elsewhere. The same unexpanded leaf can still
+            # be reached twice — it is then evaluated once and backed up per
+            # selection.
+            selections = []
+            for _ in range(m):
+                node = root
+                while node.is_expanded:
+                    node = node.best_child(self, min_max_stats)
+                selections.append(node)
+                cur = node
+                while cur is not None:
+                    cur.N += 1
+                    cur = cur.parent
 
-            node.expand(child_prior, h_next, reward_val)
-            node.backup(value_val, self, min_max_stats)
+            unique = []
+            batch_index = {}
+            for leaf in selections:
+                if id(leaf) not in batch_index:
+                    batch_index[id(leaf)] = len(unique)
+                    unique.append(leaf)
+
+            # One batched recurrent inference for the whole round. Hidden
+            # states are opaque here: torch tensors when the network is local,
+            # numpy arrays through the inference-server adapter.
+            parent_h = [leaf.parent.h_state for leaf in unique]
+            if isinstance(parent_h[0], torch.Tensor):
+                h_batch = torch.cat(parent_h, dim=0)
+            else:
+                h_batch = np.concatenate(parent_h, axis=0)
+            action_tensor = torch.tensor(
+                [leaf.move for leaf in unique], dtype=torch.long, device=self.device
+            )
+            h_next, reward, policy_logits, value = network.recurrent_inference(h_batch, action_tensor)
+            child_prior = F.softmax(policy_logits, dim=-1).detach().cpu().numpy().astype(np.float32)
+            reward_np = reward.detach().cpu().numpy()
+            value_np = value.detach().cpu().numpy()
+
+            # Roll the virtual visits back, then expand and back up for real.
+            for leaf in selections:
+                cur = leaf
+                while cur is not None:
+                    cur.N -= 1
+                    cur = cur.parent
+            for j, leaf in enumerate(unique):
+                leaf.expand(child_prior[j], h_next[j:j + 1], float(reward_np[j]))
+            for leaf in selections:
+                j = batch_index[id(leaf)]
+                leaf.backup(float(value_np[j]), self, min_max_stats)
+            sims_done += m
 
         visits = root.child_N.astype(np.float64)
-        pi_prob = _visits_to_policy(visits, temperature)
+        # Policy target: the RAW normalised visit distribution (MuZero paper).
+        # Temperature is applied only to action *selection* below — feeding the
+        # tempered distribution back as the training target over-sharpens the
+        # policy head once the schedule drops below 1.0.
+        total = visits.sum()
+        if total > 0:
+            pi_target = visits / total
+        else:
+            pi_target = np.ones_like(visits) / len(visits)
 
         if deterministic:
             action_idx = int(np.argmax(visits))
         else:
-            action_idx = int(np.random.choice(np.arange(len(pi_prob)), p=pi_prob))
+            pi_select = _visits_to_policy(visits, temperature)
+            action_idx = int(np.random.choice(np.arange(len(pi_select)), p=pi_select))
 
         action = root.children[action_idx].move
-        return action, pi_prob.astype(np.float32), float(root.Q)
+        return action, pi_target.astype(np.float32), float(root.Q)
 
 
 def _add_dirichlet_noise(prob, eps, alpha):

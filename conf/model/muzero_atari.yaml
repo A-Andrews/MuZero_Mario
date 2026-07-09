@@ -3,8 +3,10 @@ input_spatial: 96
 hidden_channels: 256
 hidden_spatial: 6
 num_actions: 12
-value_support: [-300, 300, 601]
-reward_support: [-30, 30, 61]
+# Interpolated from conf/muzero.yaml so the head sizes always match the
+# support grid the loss trains against.
+value_support: ["${muzero.value_support_min}", "${muzero.value_support_max}", "${muzero.value_support_size}"]
+reward_support: ["${muzero.reward_support_min}", "${muzero.reward_support_max}", "${muzero.reward_support_size}"]
 rep_blocks: [2, 3, 3, 3]
 dyn_blocks: 15
 pred_blocks: 2

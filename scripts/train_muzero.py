@@ -1,7 +1,9 @@
 """MuZero-Mario training entrypoint."""
 from __future__ import annotations
 
+import math
 import random
+import signal
 import sys
 from pathlib import Path
 
@@ -88,12 +90,31 @@ def main(cfg: DictConfig):
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["env"] = env_cfg  # ensure resolved int_path propagates
 
+    # --- resume-from-latest auto-detection -----------------------------------
+    # If cfg.run_name is set, treat out_dir/checkpoints/latest.pt as the
+    # canonical resume point: the same SLURM script can be resubmitted with
+    # --dependency=afterany and will pick up where the previous job stopped.
+    # Explicit cfg.resume.path always wins so users can still pin a specific
+    # checkpoint.
+    run_name = cfg_dict.get("run_name")
+    auto_resume_path = None
+    if cfg.resume.path is None and run_name:
+        candidate = out_dir / "checkpoints" / "latest.pt"
+        if candidate.exists():
+            auto_resume_path = candidate
+            print(f"[train] auto-resume: found {candidate}")
+
     # --- wandb ----------------------------------------------------------------
     w = cfg_dict["wandb"]
+    # When run_name is set, use it as a stable wandb id so re-submitted SLURM
+    # jobs append to the original run rather than spawning a fresh one. Without
+    # run_name, fall back to wandb's auto-generated id (original behavior).
+    wandb_id = run_name if run_name else None
+    wandb_resume = "allow" if run_name else None
     wandb_logger = WandbLogger(
         project=w["project"],
         entity=w.get("entity"),
-        name=w.get("name"),
+        name=w.get("name") or run_name,
         config=cfg_dict,
         mode=w.get("mode", "online"),
         dir=str(out_dir),
@@ -101,6 +122,8 @@ def main(cfg: DictConfig):
         notes=w.get("notes"),
         group=w.get("group"),
         job_type=w.get("job_type"),
+        id=wandb_id,
+        resume=wandb_resume,
     )
 
     # --- networks + optimizer -------------------------------------------------
@@ -113,11 +136,22 @@ def main(cfg: DictConfig):
         lr=float(cfg.training.lr),
         weight_decay=float(cfg.training.weight_decay),
     )
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=int(cfg.training.lr_decay_steps),
-        gamma=float(cfg.training.lr_decay_factor),
-    )
+    # Warmup + cosine decay to a floor, then constant at the floor. The
+    # previous StepLR (x0.1 every lr_decay_steps) silently drove the LR to
+    # ~1e-9 on long runs, killing learning entirely.
+    lr_max = float(cfg.training.lr)
+    lr_min = float(cfg.training.get("lr_min", lr_max * 0.1))
+    warmup = max(1, int(cfg.training.get("lr_warmup_steps", 1000)))
+    decay_steps = max(1, int(cfg.training.lr_decay_steps))
+
+    def _lr_lambda(step: int) -> float:
+        if step < warmup:
+            return (step + 1) / warmup
+        frac = min(1.0, (step - warmup) / decay_steps)
+        cos = 0.5 * (1.0 + math.cos(math.pi * frac))
+        return (lr_min + (lr_max - lr_min) * cos) / lr_max
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_lr_lambda)
 
     # --- buffer ---------------------------------------------------------------
     buffer = TrajectoryBuffer(
@@ -129,6 +163,9 @@ def main(cfg: DictConfig):
         priority_beta_end=float(cfg.buffer.priority_beta_end),
         priority_beta_anneal_steps=int(cfg.buffer.priority_beta_anneal_steps),
         eps_priority=float(cfg.buffer.eps_priority),
+        reanalyze=bool(cfg.muzero.get("reanalyze", False)),
+        n_step=int(cfg.muzero.n_step),
+        discount=float(cfg.muzero.discount),
     )
 
     # --- self-play ------------------------------------------------------------
@@ -154,9 +191,10 @@ def main(cfg: DictConfig):
     )
 
     start_step = 0
-    if cfg.resume.path is not None:
-        start_step = trainer.load(cfg.resume.path)
-        print(f"[train] resumed at training_step={start_step}")
+    resume_path = cfg.resume.path if cfg.resume.path is not None else auto_resume_path
+    if resume_path is not None:
+        start_step = trainer.load(resume_path)
+        print(f"[train] resumed at training_step={start_step} from {resume_path}")
 
     print("[train] trainer created, broadcasting weights...", flush=True)
     # Send initial (or resumed) weights to workers before training begins.
@@ -164,8 +202,18 @@ def main(cfg: DictConfig):
     coordinator.set_train_step(start_step)
     print("[train] weights broadcast done, starting training loop", flush=True)
 
+    # SLURM sends SIGTERM ~32s before the wall. Re-raise as KeyboardInterrupt
+    # so the try/finally below unwinds and wandb.finish() runs — otherwise the
+    # run is mislabelled "crashed" on wandb instead of "finished (truncated)".
+    def _handle_sigterm(signum, frame):
+        raise KeyboardInterrupt("SIGTERM received")
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+
     try:
         trainer.training_loop(start_step=start_step)
+    except KeyboardInterrupt as e:
+        print(f"[train] interrupted ({e}); finalizing wandb", flush=True)
     finally:
         trainer.close()
         coordinator.stop()

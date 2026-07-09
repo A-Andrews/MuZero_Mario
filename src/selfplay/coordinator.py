@@ -8,7 +8,8 @@ place (no pickle through pipes).
 from __future__ import annotations
 
 import pickle
-from typing import List
+from ctypes import c_double
+from typing import Dict, List, Sequence
 
 import torch
 import torch.multiprocessing as mp
@@ -36,6 +37,13 @@ class SelfPlayCoordinator:
         self.train_step = self.ctx.Value("i", 0)
         self._processes = []
 
+        # Shared sampling weights per level (uniform until the learner pushes
+        # the first inverse-length update). Written by the learner via
+        # update_level_weights(); read by workers at each episode boundary.
+        n_levels = len(self.levels)
+        uniform = 1.0 / max(1, n_levels)
+        self.level_weights = self.ctx.Array(c_double, [uniform] * n_levels, lock=True)
+
         # --- inference plumbing -----------------------------------------------
         self.request_queue = self.ctx.Queue(maxsize=num_workers * 8)
         self._server_reply_conns = []
@@ -57,6 +65,7 @@ class SelfPlayCoordinator:
             use_amp=bool(cfg.get("inference_server", {}).get("use_amp", True)),
             wire_dtype=str(cfg.get("inference_server", {}).get("wire_dtype", "float32")),
             pad_batches=bool(cfg.get("inference_server", {}).get("pad_batches", False)),
+            compile_mode=str(cfg.get("inference_server", {}).get("compile", "off")),
         )
         if initial_state_dict is not None:
             # Pre-load learner weights so workers never see the server's
@@ -66,13 +75,22 @@ class SelfPlayCoordinator:
 
         # --- workers ---------------------------------------------------------
         cfg_pkl = pickle.dumps(cfg)
+        autocurriculum_enabled = bool(
+            (cfg.get("autocurriculum") or {}).get("enabled", False)
+        ) and len(self.levels) > 1
         for i in range(num_workers):
-            level = self.levels[i % len(self.levels)]
+            # When autocurriculum is on, the worker picks its level from the
+            # shared weights at every episode boundary; the initial_level is
+            # just where it starts before the first sample.
+            initial_level = self.levels[i % len(self.levels)]
             p = self.ctx.Process(
                 target=selfplay_worker,
                 args=(
                     i,
-                    level,
+                    initial_level,
+                    list(self.levels),
+                    self.level_weights,
+                    autocurriculum_enabled,
                     cfg_pkl,
                     self.request_queue,
                     worker_reply_conns[i],
@@ -114,6 +132,15 @@ class SelfPlayCoordinator:
     def broadcast_weights(self, state_dict):
         """Push the latest weights into the inference server (no IPC)."""
         self.inference_server.update_weights(state_dict)
+
+    def update_level_weights(self, weights: Dict[str, float]) -> None:
+        """Write a new per-level sampling distribution into shared memory."""
+        with self.level_weights.get_lock():
+            for i, lv in enumerate(self.levels):
+                w = float(weights.get(lv, 0.0))
+                if w < 0.0 or w != w:  # NaN guard
+                    w = 0.0
+                self.level_weights[i] = w
 
     def stop(self):
         try:

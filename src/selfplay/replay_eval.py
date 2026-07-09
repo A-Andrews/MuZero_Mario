@@ -32,8 +32,9 @@ def run_replay_rollout(
     max_steps: int = 5000,
     seed: int = 2024,
     bk2_path: Optional[Path] = None,
-) -> Tuple[List[np.ndarray], float, int]:
-    """Return (raw_rgb_frames, total_return, num_env_steps).
+    leaf_batch: int = 1,
+) -> Tuple[List[np.ndarray], float, int, bool]:
+    """Return (raw_rgb_frames, total_return, num_env_steps, level_completed).
 
     If `bk2_path` is provided, the underlying retro emulator records a `.bk2`
     movie of the rollout. The recording starts after `env.reset()` so the
@@ -59,6 +60,7 @@ def run_replay_rollout(
         pb_c_base=pb_c_base,
         pb_c_init=pb_c_init,
         device=device,
+        leaf_batch=leaf_batch,
     )
     network.eval()
 
@@ -85,6 +87,7 @@ def run_replay_rollout(
     total_return = 0.0
     step = 0
     done = False
+    completed = False
     try:
         while not done and step < max_steps:
             with torch.no_grad():
@@ -93,6 +96,8 @@ def run_replay_rollout(
             total_return += float(reward)
             frames.append(env.latest_raw_rgb().copy())
             step += 1
+            if done:
+                completed = bool(info.get("level_complete", False))
     finally:
         if recording and rec_env is not None:
             try:
@@ -100,4 +105,4 @@ def run_replay_rollout(
             except Exception:
                 pass
         env.close()
-    return frames, total_return, step
+    return frames, total_return, step, completed

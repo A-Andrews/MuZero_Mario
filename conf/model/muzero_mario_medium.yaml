@@ -1,0 +1,17 @@
+# Mid-size MuZero net for Mario: sits between muzero_mario_small (128ch/6 dyn)
+# and the full muzero_atari tower (256ch/15 dyn). ~2-2.5x the small net's
+# compute. Intended to give MCTS a more accurate learned model of enemy/gap
+# dynamics for precise platforming, while staying well clear of the full-Atari
+# throughput cliff (~5 env-steps/s on a shared A100).
+input_channels: 4
+input_spatial: 96
+hidden_channels: 192
+hidden_spatial: 6
+num_actions: 12
+# Interpolated from conf/muzero.yaml so the head sizes always match the
+# support grid the loss trains against.
+value_support: ["${muzero.value_support_min}", "${muzero.value_support_max}", "${muzero.value_support_size}"]
+reward_support: ["${muzero.reward_support_min}", "${muzero.reward_support_max}", "${muzero.reward_support_size}"]
+rep_blocks: [2, 2, 2, 2]
+dyn_blocks: 10
+pred_blocks: 1

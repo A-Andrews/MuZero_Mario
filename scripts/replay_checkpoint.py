@@ -60,7 +60,7 @@ def main():
 
     for level in levels:
         try:
-            frames, ret, n = run_replay_rollout(
+            frames, ret, n, completed = run_replay_rollout(
                 level=level,
                 int_path=cfg["env"]["int_path"],
                 network=net,
@@ -77,7 +77,10 @@ def main():
             )
             path = out_dir / f"{level}.mp4"
             save_video(path, frames, fps=video_fps)
-            print(f"{level}: return={ret:.2f}  steps={n}  -> {path} (+ {level}.bk2)")
+            print(
+                f"{level}: return={ret:.2f}  steps={n}  "
+                f"completed={completed}  -> {path} (+ {level}.bk2)"
+            )
         except Exception as e:
             print(f"{level}: FAILED — {e}")
 

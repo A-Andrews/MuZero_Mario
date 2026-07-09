@@ -1,0 +1,91 @@
+{
+  "checkpoint": "/exafs1/well/costa/users/zqa082/muzero_mario/outputs/runs/autocurriculum-longdecay/checkpoints/step_1050000.pt",
+  "step": 1050000,
+  "env_step": 3567627,
+  "levels": {
+    "Level1-1": {
+      "completed": false,
+      "max_x": 434,
+      "score": 0,
+      "n_steps": 2483,
+      "return": -2.100000000000285
+    },
+    "Level1-2": {
+      "completed": false,
+      "max_x": 322,
+      "score": 30,
+      "n_steps": 2486,
+      "return": -12.550000000000104
+    },
+    "Level1-3": {
+      "completed": false,
+      "max_x": 411,
+      "score": 0,
+      "n_steps": 125,
+      "return": 35.000000000000036
+    },
+    "Level2-1": {
+      "completed": false,
+      "max_x": 470,
+      "score": 0,
+      "n_steps": 130,
+      "return": 40.599999999999994
+    },
+    "Level2-2": {
+      "completed": false,
+      "max_x": 793,
+      "score": 0,
+      "n_steps": 570,
+      "return": 79.10000000000016
+    },
+    "Level2-3": {
+      "completed": false,
+      "max_x": 146,
+      "score": 0,
+      "n_steps": 1880,
+      "return": -20.899999999999988
+    },
+    "Level3-1": {
+      "completed": false,
+      "max_x": 594,
+      "score": 110,
+      "n_steps": 2485,
+      "return": 16.649999999999444
+    },
+    "Level3-2": {
+      "completed": false,
+      "max_x": 770,
+      "score": 0,
+      "n_steps": 1876,
+      "return": 41.50000000000013
+    },
+    "Level3-3": {
+      "completed": false,
+      "max_x": 464,
+      "score": 0,
+      "n_steps": 124,
+      "return": 40.3
+    },
+    "Level4-1": {
+      "completed": false,
+      "max_x": 1432,
+      "score": 0,
+      "n_steps": 208,
+      "return": 135.40000000000003
+    },
+    "Level4-2": {
+      "completed": false,
+      "max_x": 325,
+      "score": 0,
+      "n_steps": 126,
+      "return": 26.50000000000003
+    },
+    "Level4-3": {
+      "completed": false,
+      "max_x": 544,
+      "score": 0,
+      "n_steps": 132,
+      "return": 48.099999999999994
+    }
+  }
+}

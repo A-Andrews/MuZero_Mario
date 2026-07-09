@@ -46,7 +46,14 @@ class Node:
         return self.children[a_idx]
 
     def child_Q(self, config, min_max_stats):
-        Q = np.zeros(len(self.children), dtype=np.float32)
+        # Unvisited children fall back to this node's own (normalised) mean
+        # value rather than 0 — the bottom of the normalised range. With
+        # Mario's mostly-positive shaped rewards a 0 default makes every
+        # fresh action look worst-case after a few visits, so exploration
+        # would rest entirely on the prior term (EfficientZero uses the same
+        # parent-value fallback).
+        fallback = min_max_stats.normalize(self.Q)
+        Q = np.full(len(self.children), fallback, dtype=np.float32)
         for i, child in enumerate(self.children):
             if child.N > 0:
                 Q[i] = min_max_stats.normalize(child.rwd + config.discount * child.Q)

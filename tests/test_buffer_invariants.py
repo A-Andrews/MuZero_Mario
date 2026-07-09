@@ -74,8 +74,7 @@ def test_flat_cache_consistent_through_add_evict_update():
 
 def test_sampling_is_proportional_to_priority():
     buf = TrajectoryBuffer(capacity_transitions=10_000, unroll_K=1, num_actions=4)
-    # add() resets new trajectories to the current max priority, so set the
-    # 3:1 ratio explicitly afterwards via the public priority-update path.
+    # Set the 3:1 ratio explicitly via the public priority-update path.
     buf.add(_make_traj(100))
     buf.add(_make_traj(100))
     tid0, tid1 = buf._ids[0], buf._ids[1]
