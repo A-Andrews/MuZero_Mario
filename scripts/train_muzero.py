@@ -1,6 +1,7 @@
 """MuZero-Mario training entrypoint."""
 from __future__ import annotations
 
+import json
 import math
 import random
 import signal
@@ -20,7 +21,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from src.logs.wandb_logger import WandbLogger
-from src.muzero.buffer import TrajectoryBuffer
+from src.muzero.buffer import MixedBuffer, TrajectoryBuffer
+from src.muzero.human_data import load_human_buffer
 from src.muzero.muzero import MuzeroLearner
 from src.muzero.networks import MuZeroNet
 from src.selfplay.coordinator import SelfPlayCoordinator
@@ -104,6 +106,27 @@ def main(cfg: DictConfig):
             auto_resume_path = candidate
             print(f"[train] auto-resume: found {candidate}")
 
+    # --- completed-run fast exit ----------------------------------------------
+    # The learner writes TRAINING_COMPLETE when env_step reaches
+    # training.total_env_steps. Chained SLURM resume legs land here; bail out
+    # before wandb / human-data / coordinator setup unless the budget was
+    # raised past what the sentinel records.
+    sentinel = out_dir / "TRAINING_COMPLETE"
+    if sentinel.exists():
+        try:
+            done = json.loads(sentinel.read_text())
+        except (ValueError, OSError):
+            done = {}
+        if int(cfg.training.total_env_steps) <= int(done.get("env_step", 0)):
+            print(
+                f"[train] {sentinel} present: run already reached "
+                f"env_step={done.get('env_step')} >= "
+                f"total_env_steps={int(cfg.training.total_env_steps)}; nothing to do. "
+                f"(Raise training.total_env_steps or remove the sentinel to continue.)",
+                flush=True,
+            )
+            return
+
     # --- wandb ----------------------------------------------------------------
     w = cfg_dict["wandb"]
     # When run_name is set, use it as a stable wandb id so re-submitted SLURM
@@ -168,26 +191,57 @@ def main(cfg: DictConfig):
         discount=float(cfg.muzero.discount),
     )
 
-    # --- self-play ------------------------------------------------------------
-    coordinator = SelfPlayCoordinator(
-        cfg=cfg_dict,
-        num_workers=int(cfg.selfplay.num_workers),
-        levels=list(cfg.env.levels),
-        device=device,
-        initial_state_dict=online_net.state_dict(),
-    )
+    # --- imitation: pinned human buffer + sample-time mixing -------------------
+    im_cfg = cfg_dict.get("imitation") or {}
+    human_eval = None
+    pretrain_steps = 0
+    if im_cfg.get("enabled", False):
+        pretrain_steps = int(im_cfg.get("pretrain_steps", 0))
+        lv = im_cfg.get("levels", "match_env")
+        if lv == "match_env":
+            im_levels = list(cfg.env.levels)
+        elif lv == "all" or lv is None:
+            im_levels = None
+        else:
+            im_levels = list(lv)
+        human_buffer, human_eval = load_human_buffer(
+            im_cfg.get("data_dir", "outputs/human_trajectories"),
+            unroll_K=int(cfg.muzero.unroll_K),
+            num_actions=int(cfg.model.num_actions),
+            levels=im_levels,
+            subjects=list(im_cfg["subjects"]) if im_cfg.get("subjects") else None,
+            completed_only=bool(im_cfg.get("completed_only", False)),
+            max_transitions=int(im_cfg.get("max_transitions", 0)),
+            holdout_fraction=float(im_cfg.get("holdout_fraction", 0.0)),
+            holdout_max_transitions=int(im_cfg.get("holdout_max_transitions", 4096)),
+            buffer_kwargs=dict(
+                priority_alpha=float(cfg.buffer.priority_alpha),
+                priority_beta_start=float(cfg.buffer.priority_beta_start),
+                priority_beta_end=float(cfg.buffer.priority_beta_end),
+                priority_beta_anneal_steps=int(cfg.buffer.priority_beta_anneal_steps),
+                eps_priority=float(cfg.buffer.eps_priority),
+                reanalyze=bool(cfg.muzero.get("reanalyze", False)),
+                n_step=int(cfg.muzero.n_step),
+                discount=float(cfg.muzero.discount),
+            ),
+            seed=int(cfg.seed),
+        )
+        buffer = MixedBuffer(buffer, human_buffer, float(im_cfg.get("mix_ratio", 0.0)))
 
     # --- trainer --------------------------------------------------------------
+    # The coordinator is constructed *after* the (optional) imitation pretrain
+    # so self-play workers start from the BC-pretrained weights.
     trainer = MuzeroLearner(
         cfg=cfg_dict,
         network=online_net,
         optimizer=optimizer,
         scheduler=scheduler,
         buffer=buffer,
-        coordinator=coordinator,
+        coordinator=None,
         device=device,
         out_dir=out_dir,
         wandb_logger=wandb_logger,
+        human_eval=human_eval,
     )
 
     start_step = 0
@@ -195,28 +249,72 @@ def main(cfg: DictConfig):
     if resume_path is not None:
         start_step = trainer.load(resume_path)
         print(f"[train] resumed at training_step={start_step} from {resume_path}")
-
-    print("[train] trainer created, broadcasting weights...", flush=True)
-    # Send initial (or resumed) weights to workers before training begins.
-    coordinator.broadcast_weights(online_net.state_dict())
-    coordinator.set_train_step(start_step)
-    print("[train] weights broadcast done, starting training loop", flush=True)
+        if 0 < start_step < pretrain_steps:
+            print(
+                f"[train] WARNING: resuming with imitation enabled at step {start_step} "
+                f"< pretrain_steps={pretrain_steps}: pretrain will continue. If this "
+                f"checkpoint came from a run WITHOUT imitation, you are about to "
+                f"BC-pretrain an already-trained net — use a fresh run_name instead.",
+                flush=True,
+            )
 
     # SLURM sends SIGTERM ~32s before the wall. Re-raise as KeyboardInterrupt
     # so the try/finally below unwinds and wandb.finish() runs — otherwise the
     # run is mislabelled "crashed" on wandb instead of "finished (truncated)".
+    # Installed before pretrain so the pretrain phase is also covered.
     def _handle_sigterm(signum, frame):
         raise KeyboardInterrupt("SIGTERM received")
 
     signal.signal(signal.SIGTERM, _handle_sigterm)
 
+    coordinator = None
     try:
+        # Backstop for run dirs from before the sentinel existed: a resumed
+        # checkpoint at/over budget means there is nothing left to train —
+        # don't pretrain or spawn 30+ worker processes just to exit.
+        if trainer.env_step >= trainer.total_env_steps:
+            print(
+                f"[train] resumed checkpoint already at env-step budget "
+                f"({trainer.env_step}/{trainer.total_env_steps}); exiting.",
+                flush=True,
+            )
+            trainer.write_complete_sentinel()
+            return
+
+        # No-op unless imitation is enabled and start_step < pretrain_steps.
+        start_step = trainer.pretrain(start_step)
+
+        # --- self-play --------------------------------------------------------
+        coordinator = SelfPlayCoordinator(
+            cfg=cfg_dict,
+            num_workers=int(cfg.selfplay.num_workers),
+            levels=list(cfg.env.levels),
+            device=device,
+            initial_state_dict=online_net.state_dict(),
+        )
+        trainer.set_coordinator(coordinator)
+
+        print("[train] broadcasting weights...", flush=True)
+        # Send initial (resumed / pretrained) weights to workers before training.
+        coordinator.broadcast_weights(online_net.state_dict())
+        coordinator.set_train_step(max(0, start_step - pretrain_steps))
+        print("[train] weights broadcast done, starting training loop", flush=True)
+
         trainer.training_loop(start_step=start_step)
     except KeyboardInterrupt as e:
-        print(f"[train] interrupted ({e}); finalizing wandb", flush=True)
+        print(f"[train] interrupted ({e}); saving checkpoint + finalizing wandb", flush=True)
+        # Persist the steps since the last save_every boundary so the next
+        # chain leg resumes here instead of re-training them (which also made
+        # wandb drop the re-logged, non-monotonic steps). SLURM's SIGTERM
+        # leaves ~32s of grace — enough for one checkpoint write.
+        try:
+            trainer.save_final_checkpoint()
+        except Exception as save_err:
+            print(f"[train] final checkpoint save failed: {save_err}", flush=True)
     finally:
         trainer.close()
-        coordinator.stop()
+        if coordinator is not None:
+            coordinator.stop()
         wandb_logger.finish()
 
 

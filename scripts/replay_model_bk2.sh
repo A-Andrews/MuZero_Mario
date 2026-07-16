@@ -4,9 +4,9 @@
 #
 #   sbatch scripts/replay_model_bk2.sh
 #
-#SBATCH -A costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J replay_model_bk2
-#SBATCH -p short
+#SBATCH -p workq
 #SBATCH -c 4
 #SBATCH --mem 8G
 #SBATCH -o logs/replay_model_bk2-%j.out
@@ -18,10 +18,7 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 REPO="$(pwd)"
 echo "Host: $(hostname)  $(date)"
 
-module purge 2>/dev/null || true
-module load Python/3.11.3-GCCcore-12.3.0 2>/dev/null || true
 source "$REPO/.venv/bin/activate"
-export LD_LIBRARY_PATH="/well/costa/users/zqa082/conda/skylake/envs/ctm-vgdl-py38/lib:${LD_LIBRARY_PATH:-}"
 INT="$REPO/mario.stimuli"
 
 latest_bk2_dir () {  # highest step_<N> dir that actually contains Level*.bk2

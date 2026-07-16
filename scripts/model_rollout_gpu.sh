@@ -4,10 +4,9 @@
 #
 #   sbatch scripts/model_rollout_gpu.sh <checkpoint> <out.json>
 #
-#SBATCH -A gpu_costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J model_rollout_gpu
-#SBATCH -p gpu_a100_80gb,gpu_a100_40gb,gpu_v100_32gb,gpu_v100_16gb,gpu_rtx8000_48gb,gpu_rtx6000_24gb,gpu_l4_24gb,gpu_l40s_48gb
-#SBATCH -q gpu_bmrc_24hr
+#SBATCH -p workq
 #SBATCH --gres gpu:1
 #SBATCH -c 4
 #SBATCH --mem 32G
@@ -24,11 +23,7 @@ CKPT="${1:?usage: sbatch model_rollout_gpu.sh <checkpoint> <out.json>}"
 OUT="${2:?usage: sbatch model_rollout_gpu.sh <checkpoint> <out.json>}"
 echo "Checkpoint: $CKPT  ->  $OUT"
 
-module purge 2>/dev/null || true
-module load Python/3.11.3-GCCcore-12.3.0 2>/dev/null || true
-module load CUDA/12.1.1 2>/dev/null || true
 source "$REPO/.venv/bin/activate"
-export LD_LIBRARY_PATH="/well/costa/users/zqa082/conda/skylake/envs/ctm-vgdl-py38/lib:${LD_LIBRARY_PATH:-}"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 python analysis/comparison/model_rollout_progress.py "$CKPT" --device cuda --out "$OUT"

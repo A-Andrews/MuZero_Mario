@@ -9,7 +9,9 @@ venv/
 
 # Outputs
 outputs/
-logs/
+# Anchored: a bare `logs/` also matched src/logs/, which silently kept the
+# logging package out of git and lost it in the BMRC -> Isambard migration.
+/logs/
 wandb/
 wandb_runs/
 multirun/
@@ -25,6 +27,7 @@ multirun/
 
 # ROM / state files (symlinked, never commit)
 mario.stimuli/
+mario.stimuli
 
 # OS
 .DS_Store

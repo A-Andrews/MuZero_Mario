@@ -8,9 +8,9 @@
 # Submit (do not run on the login node):
 #   sbatch scripts/fetch_human_data.sh
 #
-#SBATCH -A costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J fetch_mario_scenes
-#SBATCH -p short
+#SBATCH -p workq
 #SBATCH -c 4
 #SBATCH --mem 8G
 #SBATCH -o logs/fetch_human_data-%j.out
@@ -22,14 +22,14 @@ set -euo pipefail
 echo "Host: $(hostname)  Started: $(date)"
 echo "Job ID: ${SLURM_JOB_ID:-<interactive>}"
 
-# datalad lives in ~/.local/bin; git-annex is shipped in the mario-fmri conda env.
-export PATH="$HOME/.local/bin:/well/costa/users/zqa082/conda/skylake/envs/mario-fmri/bin:$PATH"
+# Prerequisites on Isambard-AI (not installed by default): `pip install datalad`
+# into ~/.local or the venv, plus a git-annex binary on PATH (conda-forge has
+# aarch64 builds; there is no system package and no sudo).
+export PATH="$HOME/.local/bin:$PATH"
 
-# Compute nodes can reach the internet but git/curl can't find a readable CA
-# bundle there (login node works, compute node throws "SSL CA cert (path?
-# access rights?)"). Point everything at the certifi bundle on the shared
-# /well filesystem, which is guaranteed readable from compute nodes.
-CA_BUNDLE="/exafs1/well/costa/users/zqa082/muzero_mario/.venv/lib/python3.11/site-packages/certifi/cacert.pem"
+# Point git/curl at the venv's certifi bundle so downloads work identically on
+# login and compute nodes regardless of the system CA setup.
+CA_BUNDLE="${SLURM_SUBMIT_DIR:-$(pwd)}/.venv/lib/python3.11/site-packages/certifi/cacert.pem"
 export GIT_SSL_CAINFO="$CA_BUNDLE"
 export SSL_CERT_FILE="$CA_BUNDLE"
 export CURL_CA_BUNDLE="$CA_BUNDLE"
@@ -38,7 +38,7 @@ export REQUESTS_CA_BUNDLE="$CA_BUNDLE"
 echo "datalad:   $(command -v datalad)  $(datalad --version 2>&1 | head -1)"
 echo "git-annex: $(command -v git-annex)  $(git-annex version 2>&1 | head -1)"
 
-DEST="/well/costa/users/zqa082/mario.learning_trajectories/data/mario.scenes"
+DEST="${MARIO_SCENES_DIR:-$HOME/data/mario.scenes}"
 mkdir -p "$(dirname "$DEST")"
 
 # Clean up a leftover partial clone from a previous failed attempt.

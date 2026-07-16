@@ -147,7 +147,22 @@ class SelfPlayCoordinator:
             self.inference_server.stop()
         except Exception:
             pass
+        # Belt-and-braces: if this process ever put anything on these queues,
+        # never let interpreter exit block on flushing it. Workers stuck
+        # mid-put get terminated below and can leave the queues' shared
+        # write-locks held by a dead process, which would deadlock the
+        # feeder-thread join that mp runs at exit.
+        for q in (self.request_queue, self.traj_queue, self.status_queue):
+            try:
+                q.cancel_join_thread()
+            except Exception:
+                pass
         for p in self._processes:
             p.join(timeout=5)
             if p.is_alive():
                 p.terminate()
+        # Reap terminated workers so none linger as zombies into interpreter
+        # shutdown.
+        for p in self._processes:
+            if p.is_alive():
+                p.join(timeout=5)

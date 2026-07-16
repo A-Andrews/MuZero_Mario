@@ -7,6 +7,7 @@ trajectories from the coordinator's queue and trains.
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 from collections import defaultdict, deque
@@ -25,6 +26,7 @@ from src.checkpoint import (
 )
 from src.logs.video import save_video
 from src.muzero.buffer import TrajectoryBuffer
+from src.muzero.human_data import HumanEvalSet
 from src.muzero.networks import MuZeroNet
 from src.muzero.transforms import cross_entropy_on_support, support_to_scalar
 from src.selfplay.autocurriculum import LevelSampler
@@ -122,10 +124,11 @@ class MuzeroLearner:
         optimizer: torch.optim.Optimizer,
         scheduler,
         buffer: TrajectoryBuffer,
-        coordinator: SelfPlayCoordinator,
+        coordinator: Optional[SelfPlayCoordinator],
         device: torch.device,
         out_dir: Path,
         wandb_logger,
+        human_eval: Optional[HumanEvalSet] = None,
     ):
         self.cfg = cfg
         self.net = network
@@ -139,6 +142,9 @@ class MuzeroLearner:
 
         self.training_step = 0
         self.env_step = 0
+        # Step of the last on-disk checkpoint; save_final_checkpoint() skips
+        # the write when the loop happened to stop exactly on a save boundary.
+        self._last_saved_step = -1
 
         tr = cfg["training"]
         self.min_replay = int(tr["min_replay_transitions"])
@@ -210,6 +216,22 @@ class MuzeroLearner:
         )
         self._ac_episodes_seen = {lv: 0 for lv in cfg["env"]["levels"]}
 
+        # --- imitation: human-data pretrain + constant batch mix -------------
+        im = cfg.get("imitation") or {}
+        self._imitation_enabled = bool(im.get("enabled", False))
+        self._pretrain_steps = (
+            int(im.get("pretrain_steps", 0)) if self._imitation_enabled else 0
+        )
+        self._mix_ratio = float(im.get("mix_ratio", 0.0))
+        # Pretrain steps share the global training_step counter (LR warmup,
+        # checkpoints, resume all unchanged), so the RL-phase pacing — the
+        # replay-ratio gate and the worker temperature schedule — must see
+        # RL-only steps: training_step - _rl_offset.
+        self._rl_offset = self._pretrain_steps
+        self._human_eval = human_eval
+        self._bc_eval_obs: Optional[torch.Tensor] = None
+        self._bc_eval_actions: Optional[torch.Tensor] = None
+
         # Prefetch is primed once on the first post-warmup step; every
         # _train_step then requests the next batch itself.
         self._prefetch_primed = False
@@ -220,6 +242,11 @@ class MuzeroLearner:
         self._replay_thread: Optional[threading.Thread] = None
 
     # -------------------------------------------------------------------------
+
+    def set_coordinator(self, coordinator: SelfPlayCoordinator):
+        """Attach the self-play coordinator (constructed after pretrain so
+        workers start with the BC-pretrained weights)."""
+        self.coord = coordinator
 
     def load(self, ckpt_path):
         state = load_checkpoint(ckpt_path, map_location=self.device)
@@ -233,9 +260,66 @@ class MuzeroLearner:
             restore_rng(state["rng"])
         return self.training_step
 
+    # -- imitation pretrain -----------------------------------------------------
+
+    def pretrain(self, start_step: int = 0) -> int:
+        """Supervised pretraining on 100% human batches before self-play starts.
+
+        Reuses `_train_step` unchanged: policy loss against the stored one-hot
+        human actions is behavioral cloning, and value/reward/consistency
+        losses all apply. Steps count into the global `training_step`, so a
+        resumed run past `pretrain_steps` skips this entirely.
+
+        Returns the training step to hand to `training_loop`.
+        """
+        if not self._imitation_enabled or start_step >= self._pretrain_steps:
+            return start_step
+        assert hasattr(self.buffer, "set_mix_ratio"), (
+            "imitation pretrain requires the learner to hold a MixedBuffer"
+        )
+        self.training_step = start_step
+        print(
+            f"[pretrain] human-data pretraining: steps {start_step}..{self._pretrain_steps} "
+            f"({self.buffer.human_transitions()} human transitions)",
+            flush=True,
+        )
+        # Reanalyze bootstraps value targets from a lagged copy of the online
+        # net — during pretrain that net is (near-)random, so its bootstraps
+        # are noise. Train against the stored human n-step returns instead.
+        # The buffers keep emitting the reanalyze keys throughout, so batch
+        # shapes never change across the phase boundary.
+        saved_reanalyze = self.reanalyze
+        self.reanalyze = False
+        self.buffer.set_mix_ratio(1.0)
+
+        self._prefetcher.request(self.training_step)
+        while self.training_step < self._pretrain_steps:
+            loss_scalars = self._train_step()
+            self.training_step += 1
+            self._recent_losses.append(loss_scalars)
+            if self.log_every > 0 and self.training_step % self.log_every == 0:
+                self._log_pretrain()
+            if self.save_every > 0 and self.training_step % self.save_every == 0:
+                self._save_checkpoint()
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+        # _train_step eagerly requested one more (human-only, reanalyze-less)
+        # batch; consume and discard it so the flag flips below happen while
+        # the prefetch thread is idle. _prefetch_primed stays False, so
+        # training_loop re-primes with post-pretrain settings.
+        self._prefetcher.get()
+        self.reanalyze = saved_reanalyze
+        self.buffer.set_mix_ratio(self._mix_ratio)
+        self._recent_losses.clear()
+        self._save_checkpoint()  # phase boundary (may not align with save_every)
+        print(f"[pretrain] done at training_step={self.training_step}", flush=True)
+        return self.training_step
+
     # -- main loop ------------------------------------------------------------
 
     def training_loop(self, start_step: int = 0):
+        assert self.coord is not None, "set_coordinator() before training_loop()"
         self.training_step = start_step
         last_log_time = time.time()
         last_traj_count = 0
@@ -274,7 +358,10 @@ class MuzeroLearner:
                 continue
 
             # Learner pace cap: don't run ahead of self-play data collection.
-            if self.train_ratio > 0.0 and self.training_step >= self.env_step * self.train_ratio:
+            # Pretrain steps don't count — without the offset a pretrained run
+            # would sit at training_step >= env_step * ratio forever.
+            rl_steps = self.training_step - self._rl_offset
+            if self.train_ratio > 0.0 and rl_steps >= self.env_step * self.train_ratio:
                 time.sleep(0.02)
                 continue
 
@@ -291,7 +378,9 @@ class MuzeroLearner:
             # 3) Weight broadcast / log / checkpoint cadences
             if self.weight_broadcast_every > 0 and self.training_step % self.weight_broadcast_every == 0:
                 self.coord.broadcast_weights(self.net.state_dict())
-                self.coord.set_train_step(self.training_step)
+                # Workers' temperature schedule is thresholded on train steps;
+                # report RL-only steps so pretrain doesn't skip the schedule.
+                self.coord.set_train_step(self.training_step - self._rl_offset)
 
             if (
                 self._ac_enabled
@@ -316,6 +405,17 @@ class MuzeroLearner:
 
             if self.scheduler is not None:
                 self.scheduler.step()
+
+        # Budget reached: persist the tail since the last save_every boundary
+        # and mark the run complete so chained resume legs stand down.
+        print(
+            f"[train] env-step budget reached "
+            f"({self.env_step}/{self.total_env_steps}) at "
+            f"training_step={self.training_step}",
+            flush=True,
+        )
+        self.save_final_checkpoint()
+        self.write_complete_sentinel()
 
     def close(self):
         try:
@@ -529,7 +629,54 @@ class MuzeroLearner:
         metrics["train/env_step"] = self.env_step
         metrics["train/lr"] = self.opt.param_groups[0]["lr"]
         metrics["train/trajectories_per_sec"] = float(traj_rate)
+        if self._imitation_enabled:
+            metrics["train/human_buffer_transitions"] = self.buffer.human_transitions()
+            metrics["train/human_frac"] = float(getattr(self.buffer, "mix_ratio", 0.0))
+            metrics.update(self._bc_eval_metrics())
         self.wandb.log(metrics, step=self.training_step)
+
+    def _log_pretrain(self):
+        if not self._recent_losses:
+            return
+        agg = defaultdict(list)
+        for d in self._recent_losses:
+            for k, v in d.items():
+                agg[k].append(v)
+        metrics = {f"pretrain/{k}": float(np.mean(v)) for k, v in agg.items()}
+        metrics["pretrain/lr"] = self.opt.param_groups[0]["lr"]
+        metrics.update(self._bc_eval_metrics())
+        self.wandb.log(metrics, step=self.training_step)
+
+    def _bc_eval_metrics(self) -> Dict[str, float]:
+        """Top-1 accuracy + cross-entropy of the policy head against held-out
+        human actions — the cheap "human-likeness" signal, logged in both
+        phases. Runs synchronously on the learner thread, so flipping the net
+        to eval() (keeps BatchNorm stats clean of human-only batches) is safe.
+        """
+        if self._human_eval is None or len(self._human_eval) == 0:
+            return {}
+        if self._bc_eval_obs is None:
+            self._bc_eval_obs = torch.from_numpy(self._human_eval.obs)
+            self._bc_eval_actions = torch.from_numpy(self._human_eval.actions)
+        n = int(self._bc_eval_actions.shape[0])
+        correct = 0
+        ce_sum = 0.0
+        self.net.eval()
+        with torch.no_grad():
+            for i in range(0, n, 512):
+                obs = self._bc_eval_obs[i:i + 512].to(self.device).float().div_(255.0)
+                if self.use_amp:
+                    obs = obs.contiguous(memory_format=torch.channels_last)
+                acts = self._bc_eval_actions[i:i + 512].to(self.device)
+                _, policy_logits, _ = self.net.initial_step(obs)
+                logp = F.log_softmax(policy_logits.float(), dim=-1)
+                ce_sum += float(-logp.gather(1, acts.unsqueeze(1)).sum().item())
+                correct += int((logp.argmax(dim=-1) == acts).sum().item())
+        self.net.train()
+        return {
+            "imitation/bc_accuracy": correct / n,
+            "imitation/bc_cross_entropy": ce_sum / n,
+        }
 
     @staticmethod
     def _resolve_replay_every(replay_every_cfg, save_every: int) -> int:
@@ -545,7 +692,39 @@ class MuzeroLearner:
             return save_every
         return replay_every
 
+    def save_final_checkpoint(self):
+        """Checkpoint the current step unless it was already saved.
+
+        Called at the natural end of training and on SIGTERM/interrupt so the
+        steps trained since the last `save_every` boundary are never lost —
+        without this, every resumed chain leg re-trained the same tail and
+        wandb dropped the re-logged (non-monotonic) steps.
+        """
+        if self.training_step != self._last_saved_step:
+            self._save_checkpoint()
+
+    def write_complete_sentinel(self):
+        """Mark the run as having reached its env-step budget.
+
+        `train_muzero.py` and the SLURM chain scripts read this to skip /
+        cancel now-pointless resume legs. Never written on interrupt — only
+        when `env_step >= total_env_steps`.
+        """
+        sentinel = self.out_dir / "TRAINING_COMPLETE"
+        sentinel.write_text(
+            json.dumps(
+                {
+                    "env_step": int(self.env_step),
+                    "total_env_steps": int(self.total_env_steps),
+                    "training_step": int(self.training_step),
+                }
+            )
+            + "\n"
+        )
+        print(f"[train] wrote {sentinel}", flush=True)
+
     def _save_checkpoint(self):
+        self._last_saved_step = self.training_step
         ckpt_path = self.ckpt_dir / f"step_{self.training_step}.pt"
         save_checkpoint(
             path=ckpt_path,

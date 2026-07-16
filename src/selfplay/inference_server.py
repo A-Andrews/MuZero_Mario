@@ -138,13 +138,14 @@ class InferenceServer:
 
     def stop(self):
         self._stop.set()
-        # Best-effort wake of the queue-get call. The serve loop also exits via
-        # the _stop event + the 0.1s get timeout, so a full queue here is fine —
-        # never block shutdown on a bounded queue.
-        try:
-            self.request_queue.put_nowait((-1, SHUTDOWN, None))
-        except Exception:
-            pass
+        # Do NOT put a wake-up item on request_queue here: a put from this
+        # (main) process spawns a QueueFeederThread that must acquire the
+        # queue's shared write-lock. At shutdown a self-play worker can be
+        # blocked mid-send holding that lock; coordinator.stop() then
+        # terminates it, leaving the lock dead — and interpreter exit joins
+        # our feeder thread forever (observed as SLURM jobs zombie-ing for
+        # hours after wandb finished). The serve loop exits on its own via
+        # the _stop event + the 0.1s get timeout.
         if self._thread is not None:
             self._thread.join(timeout=5)
 

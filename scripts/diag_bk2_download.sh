@@ -3,9 +3,9 @@
 # Tests (a) network reachability to the CONP RIA host, (b) git-annex remote
 # enablement, (c) a single annex get with debug, under several CA settings.
 #
-#SBATCH -A costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J diag_bk2
-#SBATCH -p short
+#SBATCH -p workq
 #SBATCH -c 2
 #SBATCH --mem 4G
 #SBATCH -o logs/diag_bk2-%j.out
@@ -14,10 +14,11 @@
 
 set -uo pipefail
 echo "Host: $(hostname)  $(date)"
-REPO="/exafs1/well/costa/users/zqa082/muzero_mario"
+REPO="${SLURM_SUBMIT_DIR:-$(pwd)}"
 CA="$REPO/.venv/lib/python3.11/site-packages/certifi/cacert.pem"
-export PATH="$HOME/.local/bin:/well/costa/users/zqa082/conda/skylake/envs/mario-fmri/bin:$PATH"
-cd /well/costa/users/zqa082/mario
+# Requires datalad + git-annex on PATH (see fetch_human_data.sh header).
+export PATH="$HOME/.local/bin:$PATH"
+cd "${MARIO_ROOT:-$HOME/data/mario}"
 
 echo "=================== (a) reachability ==================="
 echo "--- curl default CA ---"

@@ -4,15 +4,17 @@
 # completed / max_x / duration). CPU-only; downloads come from the anonymous
 # CONP HTTP RIA store.
 #
-# BMRC compute nodes reach the internet via an HTTP proxy. git-annex refuses to
-# use a proxy unless annex.security.allowed-ip-addresses permits it, so we set
-# that — without it every annex get fails ("http proxy settings not used ...").
+# On clusters that route compute-node traffic through a private-IP HTTP proxy
+# (e.g. BMRC), git-annex refuses the proxy unless
+# annex.security.allowed-ip-addresses permits it, so we set that below —
+# without it every annex get fails ("http proxy settings not used ...").
+# Harmless on clusters with direct outbound access.
 #
 #   sbatch scripts/replay_human_bk2.sh
 #
-#SBATCH -A costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J replay_human_bk2
-#SBATCH -p short
+#SBATCH -p workq
 #SBATCH -c 16
 #SBATCH --mem 24G
 #SBATCH -o logs/replay_human_bk2-%j.out
@@ -24,13 +26,16 @@ cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 REPO="$(pwd)"
 echo "Host: $(hostname)  Started: $(date)  Job: ${SLURM_JOB_ID:-<interactive>}"
 
-MARIO_ROOT="/well/costa/users/zqa082/mario"
+# The courtois-neuromod "mario" datalad dataset (gamelogs .bk2s) — clone it
+# first: datalad install -r https://github.com/courtois-neuromod/mario
+MARIO_ROOT="${MARIO_ROOT:-$HOME/data/mario}"
 INT_PATH="$REPO/mario.stimuli"
 OUT="$REPO/analysis/comparison/human_attempts.csv"
 LEVELS="Level1-1,Level1-2,Level1-3,Level2-1,Level2-2,Level2-3,Level3-1,Level3-2,Level3-3,Level4-1,Level4-2,Level4-3"
 CA="$REPO/.venv/lib/python3.11/site-packages/certifi/cacert.pem"
 
-export PATH="$HOME/.local/bin:/well/costa/users/zqa082/conda/skylake/envs/mario-fmri/bin:$PATH"
+# Requires datalad + git-annex on PATH (see fetch_human_data.sh header).
+export PATH="$HOME/.local/bin:$PATH"
 export GIT_SSL_CAINFO="$CA" SSL_CERT_FILE="$CA" CURL_CA_BUNDLE="$CA"
 
 cd "$MARIO_ROOT"
@@ -63,10 +68,7 @@ echo "    .bk2 present: $PRES / $(wc -l < "$LIST")"
 # --- 2. Replay in parallel (project venv + libffi for retro) -----------------
 cd "$REPO"
 set -e
-module purge 2>/dev/null || true
-module load Python/3.11.3-GCCcore-12.3.0 2>/dev/null || true
 source "$REPO/.venv/bin/activate"
-export LD_LIBRARY_PATH="/well/costa/users/zqa082/conda/skylake/envs/ctm-vgdl-py38/lib:${LD_LIBRARY_PATH:-}"
 
 echo "==> Replaying ..."
 python analysis/comparison/batch_replay_humans.py \

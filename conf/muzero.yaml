@@ -100,6 +100,27 @@ buffer:
   priority_beta_anneal_steps: 500_000
   eps_priority: 1.0e-3
 
+# Imitation learning from converted human gameplay (the
+# scripts/convert_human_bk2.py output in data_dir). Two mechanisms, both
+# optional: a supervised pretrain phase (100% human batches, BC policy loss
+# from the stored one-hot human actions, reanalyze off) before self-play
+# starts, and a constant fraction of every RL batch drawn from a pinned
+# never-evicted human buffer. Off by default; existing runs are unaffected.
+# Memory: human obs are (4,96,96) uint8 = 36.9 KB/step — all subjects at the
+# default 12 training levels is ~1.53M steps ≈ 56.5 GB RAM, one subject ≈ 11 GB.
+imitation:
+  enabled: false
+  data_dir: outputs/human_trajectories
+  subjects: null            # null = all subjects; or a list, e.g. [sub-01]
+                            # (corpus has sub-01/02/03/05/06 — no sub-04)
+  levels: match_env         # match_env | all | explicit list [Level1-1, ...]
+  completed_only: false     # keep only flag-completed segments
+  max_transitions: 0        # 0 = unlimited; cap loaded human transitions (RAM guard)
+  holdout_fraction: 0.02    # file-level holdout for BC eval (0 disables)
+  holdout_max_transitions: 4096
+  pretrain_steps: 50_000    # supervised-only gradient steps before RL (0 skips)
+  mix_ratio: 0.25           # constant human fraction of each RL training batch
+
 selfplay:
   num_workers: 20
   max_queue_size: 32

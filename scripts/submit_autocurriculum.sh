@@ -1,13 +1,15 @@
 #!/bin/bash
-#SBATCH -A gpu_costa.prj
+#SBATCH -A brics.u6oz
 #SBATCH -J muzero_mario_ac
-#SBATCH -p gpu_a100_80gb
+#SBATCH -p workq
 #SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 11
+#SBATCH --cpus-per-gpu 72
 #SBATCH --mem-per-gpu 110G
 #SBATCH -o logs/muzero_mario_ac-%j.out
 #SBATCH -e logs/muzero_mario_ac-%j.err
-#SBATCH --time=2-12:00:00
+# workq_qos caps wall time at 24h — use scripts/submit_chain.sh for longer
+# budgets (afterany-chained jobs auto-resume from checkpoints/latest.pt).
+#SBATCH --time=1-00:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=austin.andrews@reuben.ox.ac.uk
 
@@ -30,11 +32,8 @@ echo "Host: $(hostname)  Started: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "Run name: ${RUN_NAME}"
 
-module purge
-module load Python/3.11.3-GCCcore-12.3.0
-module load CUDA/12.1.1 || true
-module load FFmpeg || true
-
+# Isambard-AI: no modules needed at runtime — the venv bundles CUDA torch
+# (cu126 aarch64 wheels) and imageio-ffmpeg ships a static ffmpeg binary.
 source "${SLURM_SUBMIT_DIR}/.venv/bin/activate"
 
 echo "Python: $(which python)"
@@ -62,5 +61,23 @@ srun python scripts/train_muzero.py \
     "++wandb.tags=[slurm-${SLURM_JOB_ID},autocurriculum,run-${RUN_NAME},branch-${GIT_BRANCH},sha-${GIT_SHA}]" \
     "++wandb.group=autocurriculum-${RUN_NAME}" \
     "$@"
+
+# The learner writes TRAINING_COMPLETE once training.total_env_steps is
+# reached. Chained (afterany) resume legs are useless past that point, so
+# cancel them; the chain is linear, so walk job -> dependent -> dependent.
+# (scancel of a pending job still *releases* its own afterany dependents,
+# hence the walk instead of a single scancel.)
+if [ -f "${RUN_DIR}/TRAINING_COMPLETE" ]; then
+    echo "Training complete — cancelling dependent chain legs."
+    CUR="${SLURM_JOB_ID}"
+    for _ in $(seq 1 20); do
+        NEXT=$(squeue -u "${USER}" -h -t PD -o "%i %E" 2>/dev/null \
+            | awk -v id="${CUR}" '$2 ~ ("afterany:" id "([^0-9]|$)") {print $1; exit}') || NEXT=""
+        [ -z "${NEXT}" ] && break
+        echo "  scancel ${NEXT}"
+        scancel "${NEXT}" || true
+        CUR="${NEXT}"
+    done
+fi
 
 echo "Done: $(date)"

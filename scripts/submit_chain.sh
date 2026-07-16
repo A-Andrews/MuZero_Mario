@@ -6,8 +6,8 @@
 # Usage:
 #   bash scripts/submit_chain.sh <RUN_NAME> <N_JOBS> [extra hydra overrides ...]
 #
-# Example (a ~7.5-day budget at 60h per job):
-#   bash scripts/submit_chain.sh autocurriculum-v2 3 training.total_env_steps=30_000_000
+# Example (a ~7-day budget at Isambard's 24h-per-job QOS cap):
+#   bash scripts/submit_chain.sh autocurriculum-v2 7 training.total_env_steps=30_000_000
 set -euo pipefail
 
 RUN_NAME="${1:?Usage: submit_chain.sh <RUN_NAME> <N_JOBS> [overrides...]}"

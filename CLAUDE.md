@@ -11,9 +11,89 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-`mario.stimuli/` is a symlink to `../ppo_study/mario.stimuli` (ROM + state files). The repo is intentionally designed as a sibling to `ppo_study` for apples-to-apples comparison with the PPO baseline.
+`mario.stimuli/` holds the ROM + state files. On BMRC it was a symlink to `../ppo_study/mario.stimuli` (the repo is intentionally a sibling of `ppo_study` for apples-to-apples comparison with the PPO baseline); on Isambard it's a direct clone of `courtois-neuromod/mario.stimuli`.
 
 `wandb login` is required once before training (wandb is mandatory, not optional).
+
+### Isambard-AI (aarch64/Grace-Hopper) setup notes
+
+This cluster has no Python 3.10 (only system `python3.11`) and no sudo. `stable-retro` has
+no wheels on PyPI for any platform (always builds from source) and its **1.0.1 sdist on
+PyPI is broken** — missing the whole `src/` directory — so install from GitHub instead:
+`pip install "stable-retro @ git+https://github.com/Farama-Foundation/stable-retro.git"`.
+That build needs three fixes on this cluster:
+- System `gcc` is 7.5.0, too old for `-std=gnu17` used by several libretro cores.
+  `module load gcc-native/13.2` (or newer) and export `CC`/`CXX` before building.
+- System Python has no dev headers (no `python311-devel`, no sudo to add it). Point CMake's
+  `Python_INCLUDE_DIR` at `cray-python/3.11.7`'s headers (`module load cray-python/3.11.7`)
+  while still using the venv's Python as the actual interpreter/executable — same ABI, just
+  borrowing the headers.
+- The vendored LuaJIT is only built with `-fPIC` when `CMAKE_SYSTEM_PROCESSOR` is
+  `x86_64`/`AMD64` (see `CMakeLists.txt` around the `BUILD_LUAJIT` block) — aarch64 falls
+  through with no PIC flag and the final `_retro...so` link fails. Needs a local patch to
+  also pass `-fPIC` for aarch64 before rebuilding LuaJIT.
+- Only the `nes` core is needed for this project; the other `add_core(...)` calls
+  (snes, genesis, atari2600, gb, gba, pce, 32x, saturn, ds, fbneo, n64) can be commented out
+  in `CMakeLists.txt` to cut compile time — they're build-order deps only
+  (`add_dependencies(retro-base ${CORE_TARGETS})`), not statically linked.
+- **Never compile with high `-j` parallelism on the login node** — it gets reaped
+  (`Hangup`/`Terminated` mid-build). Do the build inside a SLURM allocation
+  (`salloc -p workq -A <account> --cpus-per-task=32 --mem=64G --time=00:45:00 --no-shell`,
+  then `srun --jobid=<id> ...`) instead.
+- `torch`/`torchvision` CUDA wheels for aarch64 live on
+  `https://download.pytorch.org/whl/cu126/` (plain PyPI `torch` for aarch64 is CPU-only).
+- GPUs (NVIDIA GH200) are only on SLURM compute nodes, never the login node — pass
+  `--gres=gpu:N` when allocating, or `torch.cuda.is_available()` will always read `False`.
+- SLURM submit scripts use `-A brics.u6oz -p workq --gres=gpu:1` and load **no modules at
+  runtime** — the venv is self-contained (cu126 torch wheels, imageio-ffmpeg's static
+  ffmpeg). Nodes are 4×GH200 / 288 CPUs / 460G, so one GPU's fair share is 72 CPUs + 110G;
+  with that allocation `selfplay.num_workers` can go up to ~64 (default is 20).
+- The human-data scripts (`fetch_human_data.sh`, `replay_human_bk2.sh`,
+  `diag_bk2_download.sh`) additionally need `datalad` + `git-annex` on PATH and the
+  courtois-neuromod datasets cloned (paths via `MARIO_SCENES_DIR`/`MARIO_ROOT` env vars).
+  On Isambard: datalad is pip-installed in the venv, git-annex (standalone arm64 build)
+  lives at `~/tools/git-annex.linux` (add to PATH), and the `mario` dataset with all
+  3,374 gamelog .bk2s is cloned at `~/data/mario`. CONP downloads work directly — none
+  of BMRC's proxy/CA workarounds apply.
+
+## Human gameplay data (imitation learning)
+
+`scripts/convert_human_bk2.py` converts the CNeuroMod human .bk2 recordings into
+replay-buffer-compatible `Trajectory` .npz files: frame-exact emulation through the same
+integration/preprocessing/reward shaping as `CustomWrapper`, human button presses
+quantised per frame-skip window to the nearest of the 12 discrete actions, multi-life
+reps split at deaths into `done_on_life_loss`-style episodes (title-card/respawn frames
+skipped via `player_state`: 8=control, 11=dying, 4/5=flagpole). `policies` is the one-hot
+human action; `root_values`/`returns` are n-step returns (no MCTS ran); priorities are
+uniform. The converted corpus lives in `outputs/human_trajectories/` (~1.9G): 8,766
+segments / 3.25M agent-steps / 771 completions across 22 levels (humans never played
+w2l2, w7l2, or the castle -4 levels). Subjects present: sub-01/02/03/05/06 (no sub-04),
+identity encoded only in filenames. `conversion_report.json` in the same dir has
+per-rep provenance.
+
+### Training on human data (`imitation:` config block)
+
+`imitation.enabled=true` turns on two mechanisms (both optional, defaults in
+`conf/muzero.yaml`): a supervised **pretrain** phase (`pretrain_steps` gradient steps of
+100% human batches — the stored one-hot policies make the policy loss behavioral cloning;
+value/reward/consistency losses apply too; reanalyze is forced off learner-side because a
+random target net's bootstraps are noise) and a constant **mix** (`mix_ratio` of every RL
+batch drawn from a pinned, never-evicted human `TrajectoryBuffer`, wrapped with the
+self-play buffer in `MixedBuffer`). Loader: `src/muzero/human_data.py` — filters by
+subject (`imitation.subjects=[sub-01]`, null = all) and level (`levels: match_env`
+default filters to `env.levels` via the filename tag, skipping decompression of
+filtered-out files). Sequencing in `train_muzero.py`: pretrain runs **before** the
+`SelfPlayCoordinator` is constructed, so workers spawn with BC-pretrained weights.
+Pretrain steps share the global `training_step` (LR warmup/checkpoints/auto-resume
+unchanged); the replay-ratio gate and worker temperature schedule are offset by
+`pretrain_steps` — without that offset RL would deadlock at env_step=0. Human samples go
+through the same targets/reanalyze/prioritized-replay machinery as self-play data.
+`imitation/bc_accuracy` + `imitation/bc_cross_entropy` (held-out human holdout) are the
+human-likeness metrics, logged in both phases. **Memory**: obs are (4,96,96) uint8 =
+36.9 KB/step, held in RAM — all subjects at the default 12 levels ≈ 1.53M steps ≈ 56.5 GB
+(fits one GPU's 110 GB share), one subject ≈ 11 GB; `max_transitions` caps it. Enable
+imitation only on fresh `run_name`s — resuming a non-imitation checkpoint below
+`pretrain_steps` would BC-pretrain an already-trained net (a warning prints).
 
 ## Common Commands
 
@@ -25,8 +105,8 @@ python scripts/smoke_test.py
 # Full local run with overrides
 python scripts/train_muzero.py env.levels='[Level1-1]' selfplay.num_workers=1 mcts.num_simulations=10
 
-# SLURM (BMRC, A100 80GB)
-sbatch scripts/submit_bmrc.sh                          # all levels
+# SLURM (Isambard-AI, GH200: account brics.u6oz, partition workq)
+sbatch scripts/submit_isambard.sh                      # all levels
 sbatch scripts/submit_single_level.sh Level1-1         # one level, auto-tags wandb run with slurm id + git sha
 sbatch scripts/submit_benchmark.sh                     # inference server benchmark
 ```
@@ -35,6 +115,26 @@ Offline checkpoint replay (no wandb, writes mp4 per level):
 ```bash
 python scripts/replay_checkpoint.py --checkpoint <path>
 ```
+
+### Run lifecycle (chained SLURM jobs)
+
+`submit_chain.sh <run> <N> [overrides]` submits N afterany-dependent legs of
+`submit_autocurriculum.sh` that auto-resume from `checkpoints/latest.pt`. Three
+mechanisms keep the chain sane:
+- A final checkpoint is saved when the env-step budget is reached **and** on
+  SIGTERM/wall-time (`save_final_checkpoint`), so no training between `save_every`
+  boundaries is lost and resumed legs never re-log wandb steps (the old cause of
+  "monotonically increasing" warnings and 11-minute re-training legs).
+- On reaching `training.total_env_steps` the learner writes
+  `outputs/runs/<run>/TRAINING_COMPLETE` (json: env_step/total/training_step);
+  `train_muzero.py` fast-exits when the sentinel's env_step already covers the
+  configured budget (raise `training.total_env_steps` or delete the sentinel to
+  train further), and `submit_autocurriculum.sh` walks + `scancel`s the pending
+  dependent legs.
+- **Never `put` on a worker-shared mp.Queue from the learner process at shutdown**
+  (see `InferenceServer.stop`): terminated workers can die holding the queue's
+  write-lock and the learner's QueueFeederThread then deadlocks interpreter exit —
+  this zombied SLURM jobs for hours (job kept RUNNING after wandb finished).
 
 Tests:
 ```bash

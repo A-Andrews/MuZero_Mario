@@ -99,7 +99,7 @@ class TrajectoryBuffer:
 
     # -- add / evict ---------------------------------------------------------
 
-    def add(self, traj: Trajectory):
+    def add(self, traj: Trajectory, rebuild: bool = True):
         # Keep the worker-computed per-step priorities (|n-step return − MCTS
         # root value|, as in the MuZero paper) so the first pass over a new
         # trajectory targets the actually-surprising steps; only floor them at
@@ -117,7 +117,11 @@ class TrajectoryBuffer:
             evicted = self.trajectories.pop(old_tid)
             self._size -= evicted.length
 
-        self._rebuild_flat()
+        # rebuild=False lets bulk loaders (human_data.load_human_buffer) add
+        # thousands of trajectories and rebuild the flat cache once at the end
+        # instead of O(N^2) per-add rebuilds.
+        if rebuild:
+            self._rebuild_flat()
 
     # -- flat index cache ----------------------------------------------------
 
@@ -248,3 +252,91 @@ class TrajectoryBuffer:
             if p_val > new_max:
                 new_max = p_val
         self._max_priority = new_max
+
+
+class MixedBuffer:
+    """Sample-time mix of the self-play buffer and a pinned human buffer.
+
+    Presents the exact TrajectoryBuffer surface the learner and its batch
+    prefetcher use. Each sample() draws ceil(batch_size * mix_ratio) steps from
+    the human buffer and the rest from the main buffer, concatenating every
+    array key. `sample_locations` entries become ("human"|"main", traj_id, t)
+    triples; the learner passes them back opaquely and update_priorities routes
+    each to its source buffer — so prioritized replay applies to the human data
+    too (after the first pass, human priorities become |v_pred - target| like
+    everything else).
+
+    Sizing queries report the *main* buffer only: `min_replay_transitions`
+    keeps meaning "self-play data collected", and human transitions are
+    reported separately via human_transitions().
+    """
+
+    def __init__(self, main: TrajectoryBuffer, human: TrajectoryBuffer, mix_ratio: float):
+        self.main = main
+        self.human = human
+        self.set_mix_ratio(mix_ratio)
+
+    def set_mix_ratio(self, mix_ratio: float):
+        assert 0.0 <= mix_ratio <= 1.0, f"mix_ratio must be in [0,1], got {mix_ratio}"
+        self.mix_ratio = float(mix_ratio)
+
+    # -- ingestion / sizing (self-play side) -----------------------------------
+
+    def add(self, traj: Trajectory, rebuild: bool = True):
+        self.main.add(traj, rebuild=rebuild)
+
+    def size_transitions(self) -> int:
+        return self.main.size_transitions()
+
+    def size_trajectories(self) -> int:
+        return self.main.size_trajectories()
+
+    def human_transitions(self) -> int:
+        return self.human.size_transitions()
+
+    def __len__(self):
+        return self.main.size_transitions()
+
+    # -- sampling ---------------------------------------------------------------
+
+    def sample(self, batch_size: int, train_step: int):
+        n_human = min(batch_size, int(np.ceil(batch_size * self.mix_ratio)))
+        if self.main.size_transitions() == 0:
+            n_human = batch_size  # pretrain: main buffer still empty
+        if self.human.size_transitions() == 0:
+            n_human = 0
+
+        parts = []
+        if n_human > 0:
+            parts.append(("human", self.human.sample(n_human, train_step)))
+        if batch_size - n_human > 0:
+            parts.append(("main", self.main.sample(batch_size - n_human, train_step)))
+
+        if len(parts) == 1:
+            source, batch = parts[0]
+            batch["sample_locations"] = [
+                (source, tid, t) for tid, t in batch["sample_locations"]
+            ]
+            return batch
+
+        out = {}
+        for key in parts[0][1]:
+            if key == "sample_locations":
+                out[key] = [
+                    (source, tid, t)
+                    for source, batch in parts
+                    for tid, t in batch["sample_locations"]
+                ]
+            else:
+                out[key] = np.concatenate([batch[key] for _, batch in parts], axis=0)
+        return out
+
+    def update_priorities(self, sample_locations, new_priorities: np.ndarray):
+        by_source: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
+        for (source, tid, t), p in zip(sample_locations, new_priorities):
+            locs, ps = by_source.setdefault(source, ([], []))
+            locs.append((tid, t))
+            ps.append(p)
+        for source, (locs, ps) in by_source.items():
+            buf = self.human if source == "human" else self.main
+            buf.update_priorities(locs, np.asarray(ps))
