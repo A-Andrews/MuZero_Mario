@@ -24,7 +24,13 @@ training:
   lr: 1.0e-3
   lr_min: 1.0e-4
   lr_warmup_steps: 1_000
-  lr_decay_steps: 1_500_000
+  # Size lr_decay_steps to the run's realistic gradient-step count, not its
+  # env-step budget: at the observed ~0.035-0.05 train/env ratio a 10M-env-step
+  # run only reaches ~400-500K train steps. The old 1.5M default meant the LR
+  # effectively never decayed (still 8e-4 at run end) — level1-1-diag-v1's
+  # late-run completion collapse (0.72 -> ~0.15 with rising value loss)
+  # happened under that permanently-high LR.
+  lr_decay_steps: 400_000
   weight_decay: 1.0e-4
   grad_clip: 5.0
   min_replay_transitions: 10_000

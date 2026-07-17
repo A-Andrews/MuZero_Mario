@@ -182,7 +182,7 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
 
 ## Level-completion tracking
 
-The headline goal is finishing levels. Wandb metrics: `selfplay/completed/<level>` (0/1 per episode), `selfplay/completion_rate_100ep` (rolling, all levels pooled), `autocurriculum/completion_rate/<level>`, and `replay/<level>_completed` per replay checkpoint. The autocurriculum samples levels ∝ inverse-mean-episode-length × incompletion-rate, so mastered levels free up worker time for unfinished ones (`autocurriculum.min_weight` floor guards against forgetting).
+The headline goal is finishing levels. Wandb metrics: `selfplay/completed/<level>` (0/1 per episode), `selfplay/completion_rate_100ep` (rolling, all levels pooled), `autocurriculum/completion_rate/<level>`, and `replay/<level>_completed` per replay checkpoint. `checkpoints/best.pt` (+`best.json` sidecar carrying the rate across chain legs) is refreshed on every new rolling-completion-rate high — `step_*.pt` files rotate (keep=10), so best.pt is the only checkpoint guaranteed to survive a late-run performance collapse. Note `replay/<level>_completed` evaluates *greedy* MCTS (temp 0, no Dirichlet) — it can sit at 0 while noisy self-play completes 30-70%; the gap means the policy still needs exploration noise to get past specific stuck-spots. The autocurriculum samples levels ∝ inverse-mean-episode-length × incompletion-rate, so mastered levels free up worker time for unfinished ones (`autocurriculum.min_weight` floor guards against forgetting).
 
 ## Logging
 

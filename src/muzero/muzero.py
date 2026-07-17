@@ -202,6 +202,20 @@ class MuzeroLearner:
         # Rolling completion flags over the last 100 self-play episodes
         # (across all levels) — the headline "is Mario finishing levels" metric.
         self._recent_completions = deque(maxlen=100)
+        # Best-checkpoint tracking (rolling completion rate). best.pt is
+        # outside the step_*.pt rotation window, so performance peaks survive
+        # even when training later degrades. best.json carries the rate across
+        # resumed chain legs so a worse leg never overwrites a better net.
+        self._best_completion_rate = 0.0
+        self._last_best_save_step = -(10**9)
+        best_meta = self.ckpt_dir / "best.json"
+        if best_meta.exists():
+            try:
+                self._best_completion_rate = float(
+                    json.loads(best_meta.read_text()).get("completion_rate_100ep", 0.0)
+                )
+            except (ValueError, OSError):
+                pass
 
         # --- autocurriculum: inverse-length per-level sampling ---------------
         ac = cfg.get("autocurriculum", {}) or {}
@@ -337,6 +351,7 @@ class MuzeroLearner:
                 if lv in self._ac_episodes_seen:
                     self._ac_episodes_seen[lv] += 1
                 self._recent_completions.append(1.0 if completed else 0.0)
+                completion_rate = float(np.mean(self._recent_completions))
                 self.wandb.log(
                     {
                         f"selfplay/episode_return/{lv}": status["episode_return"],
@@ -344,12 +359,19 @@ class MuzeroLearner:
                         f"selfplay/final_x_pos/{lv}": status["final_x_pos"],
                         f"selfplay/mcts_root_q_mean/{lv}": status["mcts_root_q_mean"],
                         f"selfplay/completed/{lv}": 1.0 if completed else 0.0,
-                        "selfplay/completion_rate_100ep": float(
-                            np.mean(self._recent_completions)
-                        ),
+                        "selfplay/completion_rate_100ep": completion_rate,
                     },
                     step=self.training_step,
                 )
+                # New rolling-completion high → refresh best.pt. Full window
+                # only (early small-sample rates overshoot), +0.01 margin and
+                # a step gap so a slow climb doesn't checkpoint every episode.
+                if (
+                    len(self._recent_completions) == self._recent_completions.maxlen
+                    and completion_rate >= self._best_completion_rate + 0.01
+                    and self.training_step - self._last_best_save_step >= 2000
+                ):
+                    self._save_best_checkpoint(completion_rate)
 
             # 2) Gradient step if warm enough
             if self.buffer.size_transitions() < self.min_replay:
@@ -725,6 +747,44 @@ class MuzeroLearner:
             + "\n"
         )
         print(f"[train] wrote {sentinel}", flush=True)
+
+    def _save_best_checkpoint(self, completion_rate: float):
+        """Overwrite best.pt on a new rolling-completion-rate high.
+
+        step_*.pt checkpoints rotate (keep=10), so without this the
+        best-performing net is lost whenever training later degrades — the
+        level1-1-diag-v1 0.72-completion peak rotated away exactly that way.
+        wandb logs the event under train/best_completion_rate.
+        """
+        self._best_completion_rate = completion_rate
+        self._last_best_save_step = self.training_step
+        save_checkpoint(
+            path=self.ckpt_dir / "best.pt",
+            online_state_dict=self.net.state_dict(),
+            optimizer_state=self.opt.state_dict(),
+            scheduler_state=self.scheduler.state_dict() if self.scheduler is not None else None,
+            training_step=self.training_step,
+            env_step=self.env_step,
+            cfg_snapshot=self.cfg,
+        )
+        (self.ckpt_dir / "best.json").write_text(
+            json.dumps(
+                {
+                    "completion_rate_100ep": completion_rate,
+                    "training_step": int(self.training_step),
+                    "env_step": int(self.env_step),
+                }
+            )
+            + "\n"
+        )
+        self.wandb.log(
+            {"train/best_completion_rate": completion_rate}, step=self.training_step
+        )
+        print(
+            f"[train] new best completion_rate_100ep={completion_rate:.2f} "
+            f"at step {self.training_step} → best.pt",
+            flush=True,
+        )
 
     def _save_checkpoint(self):
         self._last_saved_step = self.training_step
