@@ -112,6 +112,52 @@ def test_update_priorities_routes_to_correct_buffer():
     np.testing.assert_array_equal(main._flat_priorities, main_before)
 
 
+def test_mix_schedule_interpolates_and_clamps():
+    main, human = _make_buffers()
+    mixed = MixedBuffer(
+        main, human, mix_ratio=0.9, mix_schedule=[[100, 0.5], [300, 0.1]]
+    )
+    # Schedule replaces the constant entirely.
+    assert mixed.mix_ratio_at(0) == 0.5      # clamped before first point
+    assert mixed.mix_ratio_at(100) == 0.5
+    assert abs(mixed.mix_ratio_at(200) - 0.3) < 1e-9  # linear midpoint
+    assert mixed.mix_ratio_at(300) == 0.1
+    assert mixed.mix_ratio_at(10_000) == 0.1  # clamped after last point
+
+
+def test_mix_schedule_drives_sample_counts():
+    main, human = _make_buffers()
+    mixed = MixedBuffer(
+        main, human, mix_ratio=0.9, mix_schedule=[[0, 0.5], [100, 0.0]]
+    )
+    sources = [loc[0] for loc in mixed.sample(8, train_step=0)["sample_locations"]]
+    assert sources.count("human") == 4
+    sources = [loc[0] for loc in mixed.sample(8, train_step=50)["sample_locations"]]
+    assert sources.count("human") == 2
+    sources = {loc[0] for loc in mixed.sample(8, train_step=100)["sample_locations"]}
+    assert sources == {"main"}
+
+
+def test_force_mix_ratio_overrides_schedule_and_clears():
+    main, human = _make_buffers()
+    mixed = MixedBuffer(
+        main, human, mix_ratio=0.25, mix_schedule=[[0, 0.0], [100, 0.0]]
+    )
+    mixed.force_mix_ratio(1.0)  # pretrain regime
+    assert mixed.mix_ratio_at(50) == 1.0
+    sources = {loc[0] for loc in mixed.sample(5, train_step=50)["sample_locations"]}
+    assert sources == {"human"}
+    mixed.force_mix_ratio(None)
+    assert mixed.mix_ratio_at(50) == 0.0
+
+
+def test_no_schedule_uses_constant():
+    main, human = _make_buffers()
+    mixed = MixedBuffer(main, human, mix_ratio=0.25)
+    assert mixed.mix_ratio_at(0) == 0.25
+    assert mixed.mix_ratio_at(10**9) == 0.25
+
+
 def test_add_and_sizes_are_main_only():
     main, human = _make_buffers(main_trajs=0)
     mixed = MixedBuffer(main, human, mix_ratio=0.25)

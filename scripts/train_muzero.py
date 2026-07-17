@@ -226,7 +226,20 @@ def main(cfg: DictConfig):
             ),
             seed=int(cfg.seed),
         )
-        buffer = MixedBuffer(buffer, human_buffer, float(im_cfg.get("mix_ratio", 0.0)))
+        # Schedule thresholds are written in RL-phase training steps; shift
+        # them past the pretrain phase (which shares the global step counter)
+        # so the anneal starts when self-play does.
+        mix_schedule = im_cfg.get("mix_ratio_schedule")
+        if mix_schedule:
+            mix_schedule = [
+                [int(s) + pretrain_steps, float(r)] for s, r in mix_schedule
+            ]
+        buffer = MixedBuffer(
+            buffer,
+            human_buffer,
+            float(im_cfg.get("mix_ratio", 0.0)),
+            mix_schedule=mix_schedule,
+        )
 
     # --- trainer --------------------------------------------------------------
     # The coordinator is constructed *after* the (optional) imitation pretrain

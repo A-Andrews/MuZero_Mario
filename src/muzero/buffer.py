@@ -269,16 +269,63 @@ class MixedBuffer:
     Sizing queries report the *main* buffer only: `min_replay_transitions`
     keeps meaning "self-play data collected", and human transitions are
     reported separately via human_transitions().
+
+    `mix_schedule` optionally anneals the ratio over training: a list of
+    (train_step, ratio) points, linearly interpolated and clamped to the end
+    values outside the range. It is evaluated against the `train_step` passed
+    to sample(), i.e. the learner's *global* training step — the caller is
+    responsible for shifting thresholds past any pretrain phase.
+    `force_mix_ratio` overrides both the constant and the schedule (pretrain
+    uses it to pin 100% human batches).
     """
 
-    def __init__(self, main: TrajectoryBuffer, human: TrajectoryBuffer, mix_ratio: float):
+    def __init__(
+        self,
+        main: TrajectoryBuffer,
+        human: TrajectoryBuffer,
+        mix_ratio: float,
+        mix_schedule=None,
+    ):
         self.main = main
         self.human = human
         self.set_mix_ratio(mix_ratio)
+        self.mix_schedule = self._validate_schedule(mix_schedule)
+        self._forced_ratio: float | None = None
 
     def set_mix_ratio(self, mix_ratio: float):
         assert 0.0 <= mix_ratio <= 1.0, f"mix_ratio must be in [0,1], got {mix_ratio}"
         self.mix_ratio = float(mix_ratio)
+
+    @staticmethod
+    def _validate_schedule(schedule):
+        if not schedule:
+            return None
+        pts = [(int(s), float(r)) for s, r in schedule]
+        assert all(0.0 <= r <= 1.0 for _, r in pts), f"schedule ratios must be in [0,1]: {pts}"
+        assert all(
+            pts[i][0] < pts[i + 1][0] for i in range(len(pts) - 1)
+        ), f"schedule steps must be strictly ascending: {pts}"
+        return pts
+
+    def force_mix_ratio(self, ratio: float | None):
+        """Pin the effective ratio regardless of constant/schedule (None clears)."""
+        self._forced_ratio = None if ratio is None else float(ratio)
+
+    def mix_ratio_at(self, train_step: int) -> float:
+        """Effective human fraction at this training step."""
+        if self._forced_ratio is not None:
+            return self._forced_ratio
+        if not self.mix_schedule:
+            return self.mix_ratio
+        pts = self.mix_schedule
+        if train_step <= pts[0][0]:
+            return pts[0][1]
+        for (s0, r0), (s1, r1) in zip(pts, pts[1:]):
+            # Strict < so knot steps fall through and return their stored
+            # ratio exactly (no float interpolation residue).
+            if train_step < s1:
+                return r0 + (r1 - r0) * (train_step - s0) / (s1 - s0)
+        return pts[-1][1]
 
     # -- ingestion / sizing (self-play side) -----------------------------------
 
@@ -300,7 +347,8 @@ class MixedBuffer:
     # -- sampling ---------------------------------------------------------------
 
     def sample(self, batch_size: int, train_step: int):
-        n_human = min(batch_size, int(np.ceil(batch_size * self.mix_ratio)))
+        ratio = self.mix_ratio_at(train_step)
+        n_human = min(batch_size, int(np.ceil(batch_size * ratio)))
         if self.main.size_transitions() == 0:
             n_human = batch_size  # pretrain: main buffer still empty
         if self.human.size_transitions() == 0:

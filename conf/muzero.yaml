@@ -120,6 +120,12 @@ imitation:
   holdout_max_transitions: 4096
   pretrain_steps: 50_000    # supervised-only gradient steps before RL (0 skips)
   mix_ratio: 0.25           # constant human fraction of each RL training batch
+  # Optional anneal replacing the constant: [train_step, ratio] points,
+  # linearly interpolated, clamped outside the range. Steps count RL-phase
+  # learner train steps (pretrain offset is applied automatically). E.g.
+  # [[0, 0.25], [70_000, 0.0]] fades the human anchor out over ~2M env steps
+  # at the observed ~0.035 train/env ratio. null = constant mix_ratio.
+  mix_ratio_schedule: null
 
 selfplay:
   num_workers: 20
@@ -136,6 +142,11 @@ worker:
   torch_threads: 1
 
 inference_server:
+  # Device for the server's shadow network. null = auto: cuda:1 when the
+  # learner is on CUDA and a second GPU is visible (submit with --gres=gpu:2),
+  # so the learner no longer competes with self-play inference for one GPU;
+  # otherwise the learner's device (single-GPU behavior unchanged).
+  device: null
   # GPU rows per forward, not requests: a leaf-batched recurrent request
   # contributes mcts.leaf_batch rows. 20 workers x leaf_batch 4 = 80 rows in
   # flight worst-case.

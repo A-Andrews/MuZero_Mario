@@ -222,7 +222,6 @@ class MuzeroLearner:
         self._pretrain_steps = (
             int(im.get("pretrain_steps", 0)) if self._imitation_enabled else 0
         )
-        self._mix_ratio = float(im.get("mix_ratio", 0.0))
         # Pretrain steps share the global training_step counter (LR warmup,
         # checkpoints, resume all unchanged), so the RL-phase pacing — the
         # replay-ratio gate and the worker temperature schedule — must see
@@ -274,7 +273,7 @@ class MuzeroLearner:
         """
         if not self._imitation_enabled or start_step >= self._pretrain_steps:
             return start_step
-        assert hasattr(self.buffer, "set_mix_ratio"), (
+        assert hasattr(self.buffer, "force_mix_ratio"), (
             "imitation pretrain requires the learner to hold a MixedBuffer"
         )
         self.training_step = start_step
@@ -290,7 +289,7 @@ class MuzeroLearner:
         # shapes never change across the phase boundary.
         saved_reanalyze = self.reanalyze
         self.reanalyze = False
-        self.buffer.set_mix_ratio(1.0)
+        self.buffer.force_mix_ratio(1.0)
 
         self._prefetcher.request(self.training_step)
         while self.training_step < self._pretrain_steps:
@@ -310,7 +309,7 @@ class MuzeroLearner:
         # training_loop re-primes with post-pretrain settings.
         self._prefetcher.get()
         self.reanalyze = saved_reanalyze
-        self.buffer.set_mix_ratio(self._mix_ratio)
+        self.buffer.force_mix_ratio(None)  # back to constant / schedule
         self._recent_losses.clear()
         self._save_checkpoint()  # phase boundary (may not align with save_every)
         print(f"[pretrain] done at training_step={self.training_step}", flush=True)
@@ -631,7 +630,11 @@ class MuzeroLearner:
         metrics["train/trajectories_per_sec"] = float(traj_rate)
         if self._imitation_enabled:
             metrics["train/human_buffer_transitions"] = self.buffer.human_transitions()
-            metrics["train/human_frac"] = float(getattr(self.buffer, "mix_ratio", 0.0))
+            metrics["train/human_frac"] = float(
+                self.buffer.mix_ratio_at(self.training_step)
+                if hasattr(self.buffer, "mix_ratio_at")
+                else getattr(self.buffer, "mix_ratio", 0.0)
+            )
             metrics.update(self._bc_eval_metrics())
         self.wandb.log(metrics, step=self.training_step)
 

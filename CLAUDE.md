@@ -79,7 +79,11 @@ per-rep provenance.
 value/reward/consistency losses apply too; reanalyze is forced off learner-side because a
 random target net's bootstraps are noise) and a constant **mix** (`mix_ratio` of every RL
 batch drawn from a pinned, never-evicted human `TrajectoryBuffer`, wrapped with the
-self-play buffer in `MixedBuffer`). Loader: `src/muzero/human_data.py` — filters by
+self-play buffer in `MixedBuffer`). `imitation.mix_ratio_schedule` optionally anneals the
+mix instead — `[[train_step, ratio], ...]` points, linearly interpolated, thresholds in
+RL-phase train steps (the pretrain offset is added automatically in `train_muzero.py`);
+e.g. `[[0, 0.25], [70_000, 0.0]]` fades the one-hot BC anchor out instead of dragging on
+the policy forever. `train/human_frac` logs the effective ratio. Loader: `src/muzero/human_data.py` — filters by
 subject (`imitation.subjects=[sub-01]`, null = all) and level (`levels: match_env`
 default filters to `env.levels` via the filename tag, skipping decompression of
 filtered-out files). Sequencing in `train_muzero.py`: pretrain runs **before** the
@@ -165,6 +169,7 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
 - `selfplay.num_workers` — must fit CPU budget; each worker is a process.
 - `mcts.leaf_batch` — leaves selected (with virtual visits) and evaluated per inference round trip. 1 = fully-sequential paper search; 4 cuts server round trips per env step from 33 to 9 and is the main self-play throughput lever.
 - `inference_server.{max_batch,max_wait_ms,use_amp}` — throughput vs. latency tradeoff for the batched GPU server. `max_batch` counts GPU **rows**, not requests (a leaf-batched request is `leaf_batch` rows). `inference_server.compile` (`"off"`/`"default"`/`"reduce-overhead"`) torch.compiles the server forwards — benchmark a short run before enabling on a long chain, and keep `pad_batches=true` with it.
+- `inference_server.device` — null = auto: the server's shadow net goes on `cuda:1` when a second GPU is visible (submit with `sbatch --gres=gpu:2 --cpus-per-gpu=72 ...`), separating learner training from self-play inference; with one GPU, behavior is unchanged. Motivation: single-GPU runs managed only ~0.035 gradient steps/env step against the 0.3 cap — the learner loses the GPU to the inference server.
 - `muzero.{unroll_K,n_step,discount}` — core MuZero hyperparams.
 - `muzero.loss_weight_consistency` — EfficientZero-style SimSiam consistency loss (0 disables): dynamics hidden states are pulled toward stop-grad representations of the real next observations. Big sample-efficiency win since env steps are the bottleneck.
 - `muzero.reanalyze` — value reanalyze (EfficientZero-style): n-step value targets are recomputed at sample time by bootstrapping from a lagged target net (synced every `training.target_update_every` train steps) instead of the MCTS root values frozen at collection time. Costs B×(K+1) extra no-grad representation forwards per batch.

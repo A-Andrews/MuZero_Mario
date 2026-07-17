@@ -55,11 +55,19 @@ class SelfPlayCoordinator:
             self._server_reply_conns.append(server_conn)
             worker_reply_conns.append(worker_conn)
 
+        inf_cfg = cfg.get("inference_server", {}) or {}
+        server_device = self._pick_server_device(inf_cfg.get("device"), device)
+        if server_device != device:
+            print(
+                f"[coordinator] inference server on {server_device} "
+                f"(learner on {device})",
+                flush=True,
+            )
         self.inference_server = InferenceServer(
             cfg_model=cfg["model"],
             request_queue=self.request_queue,
             reply_conns=self._server_reply_conns,
-            device=device,
+            device=server_device,
             max_batch=int(cfg.get("inference_server", {}).get("max_batch", num_workers * 4)),
             max_wait_ms=float(cfg.get("inference_server", {}).get("max_wait_ms", 1.0)),
             use_amp=bool(cfg.get("inference_server", {}).get("use_amp", True)),
@@ -107,6 +115,34 @@ class SelfPlayCoordinator:
             self._processes.append(p)
 
     # -- public API -----------------------------------------------------------
+
+    @staticmethod
+    def _pick_server_device(spec, learner_device: torch.device) -> torch.device:
+        """Device for the inference server's shadow network.
+
+        Explicit `inference_server.device` wins (falling back to the learner's
+        device if it names a GPU that isn't visible). null/unset = auto: take
+        cuda:1 when the learner is on CUDA and a second GPU is visible, so the
+        learner stops competing with self-play inference for one GPU;
+        otherwise share the learner's device (single-GPU behavior unchanged).
+        Weight broadcasts already copy tensors onto the server's device.
+        """
+        if spec:
+            d = torch.device(spec)
+            if d.type == "cuda" and (
+                not torch.cuda.is_available()
+                or (d.index or 0) >= torch.cuda.device_count()
+            ):
+                print(
+                    f"[coordinator] inference_server.device={spec} not visible; "
+                    f"using {learner_device}",
+                    flush=True,
+                )
+                return learner_device
+            return d
+        if learner_device.type == "cuda" and torch.cuda.device_count() > 1:
+            return torch.device("cuda", 1)
+        return learner_device
 
     def set_train_step(self, step: int):
         self.train_step.value = int(step)
