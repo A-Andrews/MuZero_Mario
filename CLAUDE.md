@@ -123,7 +123,12 @@ python scripts/replay_checkpoint.py --checkpoint <path>
 ### Run lifecycle (chained SLURM jobs)
 
 `submit_chain.sh <run> <N> [overrides]` submits N afterany-dependent legs of
-`submit_autocurriculum.sh` that auto-resume from `checkpoints/latest.pt`. Three
+`submit_autocurriculum.sh` that auto-resume from `checkpoints/latest.pt`; the
+`SBATCH_EXTRA` env var passes extra sbatch flags to every leg (how the 2-GPU
+split is requested). `submit_curriculum.sh [run] [N] [overrides]` wraps it
+with the full validated 12-level recipe (2-GPU split, discount 0.999, bonus
+200, rescaled LR/temperature schedules, 1M buffer) — see the script header
+for the reasoning behind each knob. Three
 mechanisms keep the chain sane:
 - A final checkpoint is saved when the env-step budget is reached **and** on
   SIGTERM/wall-time (`save_final_checkpoint`), so no training between `save_every`

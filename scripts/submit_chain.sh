@@ -14,13 +14,18 @@ RUN_NAME="${1:?Usage: submit_chain.sh <RUN_NAME> <N_JOBS> [overrides...]}"
 N_JOBS="${2:?Usage: submit_chain.sh <RUN_NAME> <N_JOBS> [overrides...]}"
 shift 2
 
+# Extra sbatch flags (e.g. SBATCH_EXTRA="--gres=gpu:2 --cpus-per-gpu=72")
+# override the #SBATCH directives baked into submit_autocurriculum.sh.
+# Intentionally unquoted below so multiple flags word-split.
+SBATCH_EXTRA="${SBATCH_EXTRA:-}"
+
 DEP=""
 for i in $(seq 1 "${N_JOBS}"); do
     if [ -z "${DEP}" ]; then
-        JOBID=$(sbatch --parsable scripts/submit_autocurriculum.sh "${RUN_NAME}" "$@")
+        JOBID=$(sbatch --parsable ${SBATCH_EXTRA} scripts/submit_autocurriculum.sh "${RUN_NAME}" "$@")
     else
         # afterany (not afterok): resume even if the previous job hit the wall.
-        JOBID=$(sbatch --parsable --dependency="afterany:${DEP}" scripts/submit_autocurriculum.sh "${RUN_NAME}" "$@")
+        JOBID=$(sbatch --parsable ${SBATCH_EXTRA} --dependency="afterany:${DEP}" scripts/submit_autocurriculum.sh "${RUN_NAME}" "$@")
     fi
     echo "submitted job ${i}/${N_JOBS}: ${JOBID}${DEP:+ (after ${DEP})}"
     DEP="${JOBID}"

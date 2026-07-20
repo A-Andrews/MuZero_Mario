@@ -40,6 +40,14 @@ def main():
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--levels", nargs="*", default=None, help="Subset of levels (default: cfg.env.levels)")
     ap.add_argument("--max-steps", type=int, default=5000)
+    ap.add_argument(
+        "--num-simulations", type=int, default=None,
+        help="Override MCTS simulations per move (default: checkpoint's cfg value)",
+    )
+    ap.add_argument(
+        "--seed", type=int, default=2024,
+        help="Env seed — vary to probe robustness of the greedy rollout",
+    )
     args = ap.parse_args()
 
     device = torch.device(args.device)
@@ -65,7 +73,11 @@ def main():
                 int_path=cfg["env"]["int_path"],
                 network=net,
                 device=device,
-                num_simulations=int(cfg["mcts"]["num_simulations"]),
+                num_simulations=(
+                    args.num_simulations
+                    if args.num_simulations is not None
+                    else int(cfg["mcts"]["num_simulations"])
+                ),
                 discount=float(cfg["muzero"]["discount"]),
                 pb_c_base=float(cfg["mcts"]["pb_c_base"]),
                 pb_c_init=float(cfg["mcts"]["pb_c_init"]),
@@ -73,6 +85,7 @@ def main():
                 frame_skip=frame_skip,
                 pad_to=pad_to,
                 max_steps=args.max_steps,
+                seed=args.seed,
                 bk2_path=out_dir / f"{level}.bk2",
             )
             path = out_dir / f"{level}.mp4"
