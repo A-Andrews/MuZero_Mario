@@ -1,12 +1,13 @@
 # MuZero-Mario backlog
 
-**Status: T1 running as of 2026-07-29.** The two eval sweeps are queued on SLURM
-(jobs **5825183** Level1-2, **5825184** Level1-1, 3h wall each). VGDL still holds
-priority for everything else. Both diagnostic runs finished cleanly; no work is
-at risk.
+**Status: T1 running as of 2026-07-29; the T6-T8 experiment program is planned
+and gated on it.** The two eval sweeps are queued on SLURM (jobs **5825183**
+Level1-2, **5825184** Level1-1, 3h wall each). VGDL still holds priority for
+everything else. Both diagnostic runs finished cleanly; no work is at risk.
 
 Next action: **read the T1 results** when the jobs land, then pick T2 or T3 by
-the decision table under T1.
+the decision table under T1. That unblocks T6-T8, the ~1,030 GPU-hour program
+at the bottom of this file.
 
 ---
 
@@ -160,6 +161,190 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 
 ---
 
+# The experiment program (T6-T8)
+
+Planned 2026-07-29. Three arms, run in this order because each feeds the next:
+
+| Arm | What | Produces | Depends on |
+|---|---|---|---|
+| **T6** | 12 per-level specialists | the distillation teachers | T1 + T2 |
+| **T7** | autocurriculum × {no human, human} | the generalist baselines | T1 + T2 |
+| **T8** | distil the 12 specialists into one all-level model | the headline model | T6 |
+
+T7 and T6 are independent of each other and can run concurrently if the
+cluster has the GPUs; T8 cannot start until T6's checkpoints exist.
+
+### Why all three block on T1/T2
+
+Decided 2026-07-29: do **not** launch on the current recipe. The open problem
+above says root Dirichlet noise, not the policy head, is carrying the 0.59-0.84
+self-play completion rate. That is survivable for a specialist you only ever
+evaluate with noise on, but it is fatal for **T8** — the teachers' stored visit
+distributions are what the student imitates, and a near-uniform teacher policy
+distils into a near-uniform student policy. Distilling before T2 lands risks
+spending the whole ~1,000 GPU-hour program measuring the noise artefact.
+
+So: read T1 (jobs 5825183/5825184, already queued), apply the T2 fixes it
+justifies — the eps anneal (T2.1) is the one that matters here, since it is what
+forces the policy head to stand on its own — then launch T6/T7.
+
+### Shared decisions across all three arms
+
+- **Recipe**: the `submit_curriculum.sh` header recipe (discount 0.999,
+  `completion_bonus` 200, `muzero_mario_medium`, cosine LR to the 1e-4 floor),
+  plus whatever T2 lands. Every arm uses the same one so the comparison is
+  clean.
+- **Evaluation**: score every arm with the `eval_sweep.py` grid, **not** with
+  greedy `replay/<level>_completed`. That metric reads 0 on models with 0.84
+  self-play completion, so it cannot rank these arms. Report completion rates
+  with Wilson 95% intervals, at matched eps/temperature across arms.
+- **Model size**: student and specialists all `muzero_mario_medium` (192ch/10).
+  Keeps T8 an honest test of whether one net of *fixed* capacity absorbs 12
+  specialists, rather than a capacity story. `muzero_atari` is the fallback only
+  if the student underfits, and CLAUDE.md flags it at ~5 env-steps/s.
+
+### Compute estimate
+
+Measured from `level1-2-diag-v1`: jobs 5727109 (24h, TIMEOUT) + 5727110
+(12:25) = **~36 GPU-hours for 15M env steps** on 1 GPU.
+
+| Arm | Runs | Cost each | Total |
+|---|---|---|---|
+| T6 specialists | 12 | ~36 GPU-h (2 chained legs, 1 GPU) | ~440 GPU-h |
+| T7 curriculum | 2 | ~192 GPU-h (4 legs × 24h × 2 GPUs) | ~384 GPU-h |
+| T8 dump + student | 1 | ~18 GPU-h dump + ~192 GPU-h | ~210 GPU-h |
+
+**~1,030 GPU-hours ≈ 43 GPU-days.** Wall-clock is far shorter — the QOS allows
+256 concurrent jobs, so all 12 specialists run in parallel (~2 days wall).
+
+---
+
+## T6 — The specialist fleet (blocked on T1/T2)
+
+12 single-level runs, 15M env steps each, matching the diag-run budget so the
+results are directly comparable to `level1-1-diag-v1` (0.84) and
+`level1-2-diag-v1` (0.68).
+
+**Blocker — `submit_all_levels.sh` cannot do this as written.** It submits one
+*unchained* `submit_single_level.sh` job per level, and that script sets no
+`run_name`, so it cannot auto-resume. At 24h wall and ~36h of work per level,
+every run would die two-thirds finished with no resume path. Needs a chained
+per-level submitter — `submit_chain.sh` already has the mechanism, but it calls
+`submit_autocurriculum.sh`; the per-level variant needs `env.levels=[<level>]`,
+`autocurriculum.enabled=false` and `run_name=spec-<level>`.
+
+```bash
+# after the new script exists:
+for L in Level1-1 ... Level4-3; do
+    bash scripts/submit_specialist.sh "$L" 2 training.total_env_steps=15_000_000
+done
+```
+
+Success criterion: each specialist's own-level completion rate under the T1
+eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
+policy dies at x=850, and 4-x are unattempted.
+
+## T7 — Autocurriculum ± human teacher (blocked on T1/T2)
+
+Two runs off `submit_curriculum.sh`, identical except for the `imitation:`
+block:
+
+```bash
+bash scripts/submit_curriculum.sh curriculum-nohuman 4
+bash scripts/submit_curriculum.sh curriculum-human 4 \
+    imitation.enabled=true \
+    imitation.pretrain_steps=50_000 \
+    'imitation.mix_ratio_schedule=[[0,0.25],[700_000,0.0]]'
+```
+
+Chosen 2026-07-29: **pretrain + annealed mix**, all subjects. The anneal is the
+point — a one-hot BC anchor that never fades drags on the policy indefinitely,
+which is what `mix_ratio_schedule` was added for. Schedule thresholds are RL
+train steps and the 50K pretrain offset is applied automatically.
+
+**Run the benchmark leg first.** The 2-GPU split and 64-worker throughput have
+never run in production:
+`bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000`.
+
+**Caveat — the human arm covers 11 of 12 levels.** Verified against the corpus
+2026-07-29: there is no `level-w2l2`, i.e. **Level2-2 has zero human data**
+(humans also never played w7l2 or the castle -4 levels, but those are not in
+`env.levels`). The autocurriculum will keep sampling Level2-2 and the human
+buffer contributes nothing there, so any T7 win must be checked per level
+before it is attributed to the human teacher. `levels: match_env` filters by
+filename tag and will simply find no w2l2 files — confirm the loader tolerates
+a requested level with zero matches rather than raising.
+
+## T8 — Distillation into one all-level model (blocked on T6)
+
+Goal: turn the 12 T6 specialists into a single model that plays all 12 levels.
+Mechanism chosen 2026-07-29: **teacher corpus → BC pretrain → RL with an
+annealed mix** — i.e. reuse the imitation pipeline end to end, with a
+specialist-generated corpus in place of the human one. A specialist is just
+another teacher.
+
+**Why this and not an online KL loss**: it needs almost no new machinery. The
+pinned never-evicted buffer, `MixedBuffer`, `mix_ratio_schedule`, the BC
+accuracy/CE metrics and the whole targets/reanalyze path already exist and are
+corpus-agnostic. No teacher has to stay resident in GPU memory. The tradeoff is
+a fixed corpus: the student never gets teacher labels on the states *it*
+visits, so compounding error is uncorrected — if the student plateaus well
+below its teachers, that is the first thing to suspect, and the escalation is
+the online-KL variant.
+
+**Step 1 — the dumper (new: `scripts/dump_specialist_trajectories.py`).**
+Load each specialist checkpoint, roll out its own level, emit `Trajectory` .npz
+in the *same format and naming convention* as `convert_human_bk2.py`. Two
+details make this free:
+- `human_data.py` filters on filename only — subject by `<subject>_` prefix,
+  level by a `level-wXlY` tag. Name the files
+  `spec-w1l1_ses-000_task-mario_level-w1l1_rep-000_seg0.npz` and both filters
+  work with **zero loader changes**; the specialist even shows up as its own
+  selectable "subject".
+- Store the **raw MCTS visit distribution** in `policies`, not a one-hot. This
+  is strictly richer supervision than the human corpus (whose one-hot is what
+  makes its policy loss pure BC) and the loader does not care.
+
+**Step 2 — the student.**
+
+```bash
+bash scripts/submit_curriculum.sh distilled-v1 4 \
+    imitation.enabled=true \
+    imitation.data_dir=outputs/specialist_trajectories \
+    imitation.pretrain_steps=50_000 \
+    imitation.max_transitions=1_500_000 \
+    'imitation.mix_ratio_schedule=[[0,0.25],[700_000,0.0]]'
+```
+
+**Open question the dumper cannot dodge — what sampling policy to dump with.**
+If T1 confirms noise is load-bearing, then a noise-free dump yields a corpus of
+*failures* (greedy completes 0), while a noisy dump yields successful
+trajectories whose stored visit distributions have Dirichlet noise baked into
+the thing the student is asked to imitate. Neither is right. This is the
+strongest reason T8 waits for T2's eps anneal: a specialist trained to work at
+eps≈0.05 can be dumped near-greedy and still succeed. Decide the dump
+temperature from the T1 grid, and record it — it is the single most
+consequential knob in this arm.
+
+**RAM ceiling — cap the corpus.** Obs are 36.9 KB/step and the pinned buffer is
+resident. The human corpus reference point is 1.53M steps ≈ 56.5 GB against a
+110 GB single-GPU share. So `max_transitions=1_500_000` ≈ 55 GB, i.e. roughly
+**125K steps ≈ 300 episodes per level** — coincidentally about the human
+corpus's ~300 segments/level. Dumping more than that just gets evicted at load
+time; dump to the cap, not beyond it.
+
+**Comparisons that make T8 interpretable**, all on the same eval grid:
+1. student vs. each specialist **on that specialist's own level** — does one net
+   hold 12 skills, or does it average them away?
+2. student vs. `curriculum-nohuman` (T7) — is distillation better than just
+   training the generalist directly?
+3. student vs. `curriculum-human` (T7) — specialist teachers vs. human teachers,
+   the same pipeline with different corpora. This is the cleanest scientific
+   comparison in the whole program and is the reason to keep both arms on
+   identical imitation settings.
+
+---
+
 ## Incidental findings worth keeping
 
 - **Level1-2 has a ~29-agent-step scripted intro** (Mario descending the
@@ -177,6 +362,9 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-07-29** — Experiment program T6-T8 planned (specialists → curriculum
+  ±human → distillation). All three gated on T1/T2 by decision, because
+  distilling a noise-dependent teacher would poison T8. ~1,030 GPU-h estimated.
 - **2026-07-29** — Live search-quality diagnostics landed (T5): root prior
   entropy, visit entropy and visit concentration now logged per level per
   episode. `pytest tests/` = 85 passed. Note bare `pytest` collects `.venv/`
