@@ -120,6 +120,25 @@ Offline checkpoint replay (no wandb, writes mp4 per level):
 python scripts/replay_checkpoint.py --checkpoint <path>
 ```
 
+### Eval-time search sweep
+
+`scripts/eval_sweep.py` (+ `scripts/submit_eval_sweep.sh`) sweeps the *eval*
+search knobs against a checkpoint and reports completion rates with Wilson 95%
+intervals. It exists because greedy `replay/<level>_completed` sat at 0 on runs
+whose self-play completion rate was 0.59-0.84, and the two measurements differ
+in more than one way at once. `run_replay_rollout` now takes `temperature`,
+`root_dirichlet_alpha`/`root_exploration_eps`, `np_seed` and an `info_out` dict
+(`final_x`, `timed_out`) so those axes can be varied independently — defaults
+reproduce the old fully-greedy replay (no noise, argmax), so per-checkpoint
+replay logging is unchanged. Note the two knobs are genuinely independent:
+temperature 0.1 is already within a few percent of argmax, so noise (not
+temperature) is what separates self-play from greedy eval.
+
+The env has no stochasticity, so a noise-free/argmax cell is one trajectory
+regardless of seed — the sweep detects this and runs such cells once, flagging
+them `deterministic` in `summary.csv`. See [BACKLOG.md](BACKLOG.md) for the
+diagnosis this was built to settle.
+
 ### Run lifecycle (chained SLURM jobs)
 
 `submit_chain.sh <run> <N> [overrides]` submits N afterany-dependent legs of

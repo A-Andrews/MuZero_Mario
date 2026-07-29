@@ -33,6 +33,11 @@ def run_replay_rollout(
     seed: int = 2024,
     bk2_path: Optional[Path] = None,
     leaf_batch: int = 1,
+    temperature: float = 0.0,
+    root_dirichlet_alpha: float = 0.0,
+    root_exploration_eps: float = 0.0,
+    np_seed: Optional[int] = None,
+    info_out: Optional[dict] = None,
 ) -> Tuple[List[np.ndarray], float, int, bool]:
     """Return (raw_rgb_frames, total_return, num_env_steps, level_completed).
 
@@ -40,7 +45,19 @@ def run_replay_rollout(
     movie of the rollout. The recording starts after `env.reset()` so the
     initial state is captured; playback (`python -m retro.scripts.playback_movie
     <file>.bk2`) replays the exact button-press sequence at native 60 Hz.
+
+    Search stochasticity is controlled by two *independent* knobs, because the
+    self-play-vs-greedy completion gap turned out to hinge on the noise one:
+    `root_exploration_eps`/`root_dirichlet_alpha` perturb the root prior (both
+    must be > 0 to take effect), and `temperature` shapes action selection
+    (<= 0 means argmax over visit counts). Defaults reproduce the original
+    fully-greedy checkpoint replay: no noise, argmax.
+
+    `np_seed` seeds numpy so a noisy rollout is reproducible; `info_out`, if
+    given, is filled with extra per-rollout diagnostics (`final_x`, `timed_out`).
     """
+    if np_seed is not None:
+        np.random.seed(int(np_seed))
     env = create_train_env(
         level=level,
         int_path=int_path,
@@ -55,8 +72,8 @@ def run_replay_rollout(
     mcts = MCTS(
         discount=discount,
         num_simulations=num_simulations,
-        root_dirichlet_alpha=0.0,
-        root_exploration_eps=0.0,
+        root_dirichlet_alpha=root_dirichlet_alpha,
+        root_exploration_eps=root_exploration_eps,
         pb_c_base=pb_c_base,
         pb_c_init=pb_c_init,
         device=device,
@@ -88,16 +105,25 @@ def run_replay_rollout(
     step = 0
     done = False
     completed = False
+    final_x = 0
     try:
         while not done and step < max_steps:
             with torch.no_grad():
-                action, _, _ = mcts.run(obs, network, temperature=0.0, deterministic=True)
+                # deterministic=False so the noise and temperature knobs above
+                # are what decide stochasticity: eps/alpha of 0 disable the
+                # root noise, temperature <= 0 falls back to argmax on visits.
+                action, _, _ = mcts.run(obs, network, temperature=temperature, deterministic=False)
             obs, reward, done, info = env.step(action)
             total_return += float(reward)
             frames.append(env.latest_raw_rgb().copy())
             step += 1
+            if "player_x_posHi" in info:
+                final_x = 256 * int(info["player_x_posHi"]) + int(info["player_x_posLo"])
             if done:
                 completed = bool(info.get("level_complete", False))
+        if info_out is not None:
+            info_out["final_x"] = final_x
+            info_out["timed_out"] = bool(not done and step >= max_steps)
     finally:
         if recording and rec_env is not None:
             try:
