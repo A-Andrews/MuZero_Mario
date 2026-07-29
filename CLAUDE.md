@@ -212,6 +212,19 @@ The headline goal is finishing levels. Wandb metrics: `selfplay/completed/<level
 
 wandb is required (`wandb login` once). Per-step losses, per-episode self-play returns per level, and per-checkpoint mp4 rollouts (`wandb.Video`) are all logged. `submit_single_level.sh` auto-tags every run with SLURM job id, level, git branch, and git sha so wandb runs are traceable back to the code version.
 
+**Search-quality diagnostics.** `selfplay/mcts_prior_entropy/<level>`,
+`selfplay/mcts_visit_entropy/<level>` and `selfplay/mcts_visit_max_frac/<level>`
+are per-episode means of the root policy-head entropy, the raw visit-distribution
+entropy and the largest single-action visit share. Entropies are nats — read them
+against ln(12) = 2.485 for the 12-action Mario set; a prior entropy sitting near
+that bound means the policy head is near-uniform and root Dirichlet noise is doing
+the exploring. Prior entropy is deliberately sampled **before** noise is added, so
+it measures the head itself. Plumbing is `MCTS.run(..., stats_out=dict)`, opt-in:
+omitting it leaves the return signature and the eval/benchmark call sites unchanged.
+
+Note: bare `pytest` collects `.venv/` and fails with ~113 collection errors —
+always scope it (`pytest tests/`).
+
 ## Reference
 
 Structural reference (pattern source, not a dependency): `/well/costa/users/zqa082/Muzero-Hanoi`.

@@ -116,6 +116,7 @@ def selfplay_worker(
 
     obs = env.reset()
     ep_obs, ep_actions, ep_rewards, ep_policies, ep_root_q = [], [], [], [], []
+    ep_prior_h, ep_visit_h, ep_visit_max = [], [], []
     ep_steps = 0
     ep_return = 0.0
 
@@ -125,8 +126,10 @@ def selfplay_worker(
         step = int(train_step_val.value)
         temperature = temperature_for_step(step, temperature_schedule)
 
+        search_stats = {}
         action, pi_prob, root_q = mcts.run(
-            obs, net, temperature=temperature, deterministic=False
+            obs, net, temperature=temperature, deterministic=False,
+            stats_out=search_stats,
         )
 
         next_obs, reward, done, info = env.step(action)
@@ -137,6 +140,9 @@ def selfplay_worker(
         ep_rewards.append(float(reward))
         ep_policies.append(pi_prob.astype(np.float32))
         ep_root_q.append(float(root_q))
+        ep_prior_h.append(search_stats["prior_entropy"])
+        ep_visit_h.append(search_stats["visit_entropy"])
+        ep_visit_max.append(search_stats["visit_max_frac"])
         ep_steps += 1
         ep_return += float(reward)
 
@@ -167,6 +173,12 @@ def selfplay_worker(
                             + int(info["player_x_posLo"])
                         ),
                         "mcts_root_q_mean": float(np.mean(ep_root_q)) if ep_root_q else 0.0,
+                        # Search-quality diagnostics. Reconstructing these from
+                        # loss magnitudes after the fact is what made the
+                        # greedy-eval investigation slow; log them live.
+                        "mcts_prior_entropy_mean": float(np.mean(ep_prior_h)) if ep_prior_h else 0.0,
+                        "mcts_visit_entropy_mean": float(np.mean(ep_visit_h)) if ep_visit_h else 0.0,
+                        "mcts_visit_max_frac_mean": float(np.mean(ep_visit_max)) if ep_visit_max else 0.0,
                         "completed": bool(info.get("level_complete", False)),
                         "train_step": step,
                     }
@@ -175,6 +187,7 @@ def selfplay_worker(
                 pass
 
             ep_obs, ep_actions, ep_rewards, ep_policies, ep_root_q = [], [], [], [], []
+            ep_prior_h, ep_visit_h, ep_visit_max = [], [], []
             ep_steps = 0
             ep_return = 0.0
 

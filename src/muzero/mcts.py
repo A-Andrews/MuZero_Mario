@@ -44,7 +44,7 @@ class MCTS:
         self.leaf_batch = max(1, int(leaf_batch))
 
     @torch.inference_mode()
-    def run(self, obs_np, network, temperature=1.0, deterministic=False):
+    def run(self, obs_np, network, temperature=1.0, deterministic=False, stats_out=None):
         """Run MCTS from the current environment observation.
 
         Args:
@@ -52,6 +52,13 @@ class MCTS:
             network: a MuZeroNet on `self.device` in eval mode.
             temperature: softmax temperature on visit counts.
             deterministic: if True, bypass Dirichlet noise and argmax visit counts.
+            stats_out: optional dict; if given, filled with search diagnostics —
+                `prior_entropy` (nats, policy head at the root **before** any
+                Dirichlet noise, so it measures the head itself and not the
+                exploration on top of it), `visit_entropy` (nats, of the raw
+                visit distribution) and `visit_max_frac` (largest single-action
+                visit share). Compare entropies against ln(num_actions), which
+                is `uniform_entropy` in the same dict.
         Returns:
             (action, pi_prob, root_Q) — action int, numpy visit-count
             distribution (raw, un-tempered — this is the policy training
@@ -63,6 +70,13 @@ class MCTS:
         h_state, policy_logits, value = network.initial_inference(obs)
         prior = F.softmax(policy_logits, dim=-1).squeeze(0).detach().cpu().numpy().astype(np.float32)
         root_value = float(value.squeeze(0).detach().cpu().item())
+
+        # Measured pre-noise on purpose: the open question is whether the policy
+        # head is discriminative on its own, and Dirichlet noise would inflate
+        # this straight back towards uniform and hide exactly that.
+        if stats_out is not None:
+            stats_out["prior_entropy"] = _entropy(prior)
+            stats_out["uniform_entropy"] = float(np.log(len(prior)))
 
         if not deterministic and self.root_dirichlet_alpha > 0.0 and self.root_exploration_eps > 0.0:
             prior = _add_dirichlet_noise(prior, self.root_exploration_eps, self.root_dirichlet_alpha)
@@ -140,6 +154,10 @@ class MCTS:
         else:
             pi_target = np.ones_like(visits) / len(visits)
 
+        if stats_out is not None:
+            stats_out["visit_entropy"] = _entropy(pi_target)
+            stats_out["visit_max_frac"] = float(pi_target.max())
+
         if deterministic:
             action_idx = int(np.argmax(visits))
         else:
@@ -148,6 +166,13 @@ class MCTS:
 
         action = root.children[action_idx].move
         return action, pi_target.astype(np.float32), float(root.Q)
+
+
+def _entropy(prob):
+    """Shannon entropy in nats, with 0·log0 = 0."""
+    p = np.asarray(prob, dtype=np.float64)
+    nz = p > 0.0
+    return float(-(p[nz] * np.log(p[nz])).sum())
 
 
 def _add_dirichlet_noise(prob, eps, alpha):

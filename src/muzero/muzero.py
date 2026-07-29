@@ -358,6 +358,13 @@ class MuzeroLearner:
                         f"selfplay/episode_length/{lv}": status["episode_length"],
                         f"selfplay/final_x_pos/{lv}": status["final_x_pos"],
                         f"selfplay/mcts_root_q_mean/{lv}": status["mcts_root_q_mean"],
+                        # Search quality. Entropies are nats; compare against
+                        # ln(12) = 2.485 for the 12-action Mario set — a prior
+                        # entropy sitting near that means the policy head is
+                        # near-uniform and root noise is doing the work.
+                        f"selfplay/mcts_prior_entropy/{lv}": status.get("mcts_prior_entropy_mean", 0.0),
+                        f"selfplay/mcts_visit_entropy/{lv}": status.get("mcts_visit_entropy_mean", 0.0),
+                        f"selfplay/mcts_visit_max_frac/{lv}": status.get("mcts_visit_max_frac_mean", 0.0),
                         f"selfplay/completed/{lv}": 1.0 if completed else 0.0,
                         "selfplay/completion_rate_100ep": completion_rate,
                     },

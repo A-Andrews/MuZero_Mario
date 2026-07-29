@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 
 from src.muzero.mcts import MCTS
@@ -56,6 +57,48 @@ def test_mcts_deterministic_argmax():
     obs = np.random.rand(4, 8, 8).astype(np.float32)
     action, _, _ = mcts.run(obs, net, temperature=0.0, deterministic=True)
     assert action == 2
+
+
+def test_search_stats_reported_when_requested():
+    mcts = MCTS(discount=0.99, num_simulations=16, root_dirichlet_alpha=0.0, device="cpu")
+    net = _StubNet(policy=np.array([0.1, 0.7, 0.1, 0.1]))
+    obs = np.random.rand(4, 8, 8).astype(np.float32)
+    stats = {}
+    _, pi, _ = mcts.run(obs, net, temperature=1.0, deterministic=False, stats_out=stats)
+    assert set(stats) == {
+        "prior_entropy", "uniform_entropy", "visit_entropy", "visit_max_frac"
+    }
+    assert stats["uniform_entropy"] == pytest.approx(np.log(4))
+    # A non-uniform prior must land strictly under the uniform bound.
+    assert 0.0 < stats["prior_entropy"] < stats["uniform_entropy"]
+    assert stats["visit_entropy"] == pytest.approx(
+        -(pi[pi > 0] * np.log(pi[pi > 0])).sum(), abs=1e-6
+    )
+    assert stats["visit_max_frac"] == pytest.approx(pi.max())
+
+
+def test_prior_entropy_measured_before_dirichlet_noise():
+    """Root noise must not inflate the reported policy-head entropy — the whole
+    point of the metric is to see the head on its own."""
+    obs = np.random.rand(4, 8, 8).astype(np.float32)
+    net = _StubNet(policy=np.array([0.97, 0.01, 0.01, 0.01]))
+    quiet, noisy = {}, {}
+    MCTS(discount=0.99, num_simulations=8, root_dirichlet_alpha=0.0,
+         root_exploration_eps=0.0, device="cpu").run(
+        obs, net, temperature=1.0, deterministic=False, stats_out=quiet)
+    MCTS(discount=0.99, num_simulations=8, root_dirichlet_alpha=0.25,
+         root_exploration_eps=0.25, device="cpu").run(
+        obs, net, temperature=1.0, deterministic=False, stats_out=noisy)
+    assert noisy["prior_entropy"] == pytest.approx(quiet["prior_entropy"], abs=1e-6)
+
+
+def test_search_stats_are_opt_in():
+    """Omitting stats_out must leave the return signature untouched."""
+    mcts = MCTS(discount=0.99, num_simulations=8, root_dirichlet_alpha=0.0, device="cpu")
+    net = _StubNet(policy=np.array([0.25, 0.25, 0.25, 0.25]))
+    obs = np.random.rand(4, 8, 8).astype(np.float32)
+    out = mcts.run(obs, net, temperature=1.0, deterministic=False)
+    assert len(out) == 3
 
 
 def test_minmax_stats_normalises():

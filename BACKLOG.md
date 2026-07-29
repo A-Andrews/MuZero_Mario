@@ -142,11 +142,21 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 - [x] Commit the T1 work: `scripts/eval_sweep.py`,
       `scripts/submit_eval_sweep.sh`, the `replay_eval.py` knobs, this file,
       and the CLAUDE.md section. Done 2026-07-29 in `684e829` on `isambard`.
-- [ ] `mario.stimuli` shows as modified in `git status` (submodule/clone drift) —
-      check whether that is intentional before the next commit.
-- [ ] Consider logging policy-head entropy and MCTS visit concentration during
+- [x] `mario.stimuli` shows as modified in `git status` (submodule/clone drift) —
+      benign, leave it. The Isambard datalad clone replaced git-annex symlinks
+      with plain `/annex/objects/MD5E-...` pointer files, so every `.state` reads
+      as content-modified. No real content change; nothing to commit.
+- [x] Consider logging policy-head entropy and MCTS visit concentration during
       training. Both diagnoses above had to be reconstructed from loss
       magnitudes after the fact; these two scalars would have shown it live.
+      Done 2026-07-29: `MCTS.run(..., stats_out=dict)` (opt-in, so the eval and
+      benchmark call sites are untouched) reports `prior_entropy`,
+      `visit_entropy`, `visit_max_frac` and the `uniform_entropy` bound; the
+      worker means them per episode and the learner logs
+      `selfplay/mcts_{prior_entropy,visit_entropy,visit_max_frac}/<level>`.
+      Prior entropy is taken **before** Dirichlet noise on purpose — the
+      question is whether the policy head is discriminative on its own, and
+      noise would push it straight back to uniform. Read against ln(12)=2.485.
 
 ---
 
@@ -167,6 +177,10 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-07-29** — Live search-quality diagnostics landed (T5): root prior
+  entropy, visit entropy and visit concentration now logged per level per
+  episode. `pytest tests/` = 85 passed. Note bare `pytest` collects `.venv/`
+  and dies with 113 collection errors — always scope it to `tests/`.
 - **2026-07-29** — T1 eval sweeps submitted: jobs **5825183** (Level1-2) and
   **5825184** (Level1-1), both off `checkpoints/best.pt`, 3h wall, 1 GPU each.
   Results pending. T1 code committed the same day in `684e829`.
