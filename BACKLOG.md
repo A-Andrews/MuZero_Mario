@@ -1,10 +1,12 @@
 # MuZero-Mario backlog
 
-**Status: paused 2026-07-27 — VGDL has priority.** Nothing is running on SLURM
-and nothing is queued. Both diagnostic runs finished cleanly; no work is at risk
-of being lost by leaving this idle.
+**Status: T1 running as of 2026-07-29.** The two eval sweeps are queued on SLURM
+(jobs **5825183** Level1-2, **5825184** Level1-1, 3h wall each). VGDL still holds
+priority for everything else. Both diagnostic runs finished cleanly; no work is
+at risk.
 
-Resume at **T1**. Everything below T1 is blocked on its result.
+Next action: **read the T1 results** when the jobs land, then pick T2 or T3 by
+the decision table under T1.
 
 ---
 
@@ -14,7 +16,8 @@ Resume at **T1**. Everything below T1 is blocked on its result.
 |---|---|---|---|---|
 | `level1-1-diag-v1` | 15M / 780K train | **0.84** @ step 696K | **0** at every checkpoint | done 2026-07-18 |
 | `level1-2-diag-v1` | 15M / 763K train | **0.68** @ step 698K | **0** at every checkpoint | done 2026-07-21 |
-| `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted** |
+| T1 eval sweep (both levels) | — | — | — | **submitted 2026-07-29**, jobs 5825183/5825184 |
+| `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**, blocked on T2 |
 
 The discount fix (0.997 → 0.999 + `completion_bonus` 200) is confirmed and is
 what unlocked completions at all; every pre-fix run was ≤4%.
@@ -48,19 +51,27 @@ three Koopas, at frame ~250/283 of
 
 ---
 
-## T1 — Run the eval sweep (**resume here**)
+## T1 — Run the eval sweep (**submitted 2026-07-29 — awaiting results**)
 
-**Ready to run. Code is written, tested (82/82 pass), and smoke-tested.**
-~1 GPU-hour. Decides which of T2/T3 is worth doing, and whether the curriculum
-run should launch as-configured.
+Code committed in `684e829` (82/82 tests pass, smoke-tested). ~1 GPU-hour each.
+Decides which of T2/T3 is worth doing, and whether the curriculum run should
+launch as-configured.
+
+Submitted as:
 
 ```bash
 sbatch scripts/submit_eval_sweep.sh \
-    outputs/runs/level1-2-diag-v1/checkpoints/best.pt Level1-2
+    outputs/runs/level1-2-diag-v1/checkpoints/best.pt Level1-2   # job 5825183
 # and, for the level that times out rather than dies:
 sbatch scripts/submit_eval_sweep.sh \
-    outputs/runs/level1-1-diag-v1/checkpoints/best.pt Level1-1
+    outputs/runs/level1-1-diag-v1/checkpoints/best.pt Level1-1   # job 5825184
 ```
+
+Results will land in `outputs/eval_sweep/Level1-2_level1-2-diag-v1_5825183/`
+and `outputs/eval_sweep/Level1-1_level1-1-diag-v1_5825184/`; logs in
+`logs/muzero_eval_sweep-{5825183,5825184}.{out,err}`.
+
+**Results: _pending — fill in when the jobs land._**
 
 Grid: eps {0, 0.1, 0.25} × temperature {0, 0.1, 0.25} × `pb_c_init` {1.25, 2.5},
 20 episodes/cell with Wilson 95% intervals. Noise-free + argmax cells are
@@ -128,9 +139,9 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 
 ## T5 — Housekeeping
 
-- [ ] Commit the T1 work: `scripts/eval_sweep.py`,
+- [x] Commit the T1 work: `scripts/eval_sweep.py`,
       `scripts/submit_eval_sweep.sh`, the `replay_eval.py` knobs, this file,
-      and the CLAUDE.md section. Currently uncommitted on `isambard`.
+      and the CLAUDE.md section. Done 2026-07-29 in `684e829` on `isambard`.
 - [ ] `mario.stimuli` shows as modified in `git status` (submodule/clone drift) —
       check whether that is intentional before the next commit.
 - [ ] Consider logging policy-head entropy and MCTS visit concentration during
@@ -148,3 +159,28 @@ bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 - The login node kills multi-threaded torch (`libgomp: Thread creation failed`).
   Anything beyond a trivial single-threaded script needs `salloc`/`sbatch`;
   `OMP_NUM_THREADS=1` is enough for quick import-level checks.
+
+---
+
+## Activity log
+
+Newest first. One line per thing actually done, so the state above can be read
+without reconstructing it from SLURM history.
+
+- **2026-07-29** — T1 eval sweeps submitted: jobs **5825183** (Level1-2) and
+  **5825184** (Level1-1), both off `checkpoints/best.pt`, 3h wall, 1 GPU each.
+  Results pending. T1 code committed the same day in `684e829`.
+- **2026-07-27** — Project paused for VGDL. Nothing MuZero left queued.
+- **2026-07-21** — `level1-2-diag-v1` finished: 15M env / 763K train steps,
+  peak self-play completion **0.68** @ step 698K, greedy replay 0 throughout.
+- **2026-07-20** — Sims sweep (job 5727108) on Level1-1: 50/200/400 sims × 3
+  seeds gave bit-identical returns per sim count (154.70 / 154.80 / 154.00),
+  never completing. First hard evidence that more search does not help.
+  `scripts/submit_curriculum.sh` written (committed in `ed4808d`, never run).
+- **2026-07-18** — `level1-1-diag-v1` finished: 15M env / 780K train steps,
+  peak self-play completion **0.84** @ step 696K, greedy replay 0 throughout.
+  Discount fix (0.997 → 0.999 + `completion_bonus` 200) confirmed as what
+  unlocked completions at all — every pre-fix run was ≤4%.
+- **2026-07-16** — `imit-all-v1` and `imit-sub01-v1` each completed their 10M
+  env-step budget (382K / 398K train steps). No `best.json` was written for
+  either, i.e. neither ever set a rolling-completion-rate high.
