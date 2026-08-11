@@ -181,10 +181,21 @@ one mp4 per cell to `outputs/eval_sweep/<level>_<run>_<jobid>/`.
 Ranked. All are config/schedule-level except the third.
 
 1. **Anneal root Dirichlet eps** 0.25 → ~0.05 alongside the temperature
-   schedule. Currently eps never decays, so the policy head is never forced to
-   stand on its own and `completion_rate_100ep` is not an honest estimate of
-   deployed performance. Needs a schedule mechanism like
-   `src/muzero/temperature.py`, threaded into `worker.py:107`.
+   schedule — **done 2026-08-11**. `mcts.root_exploration_eps_schedule`,
+   `[[train_step, eps], ...]` knots linearly interpolated, `null` (default)
+   keeps the old constant eps. The mechanism is `src/muzero/schedules.py`,
+   extracted from the linear interpolation that already lived inside
+   `MixedBuffer` so the mix ratio and the eps anneal share one implementation;
+   the worker mutates `mcts.root_exploration_eps` per step, which MCTS reads at
+   `run()` time. Effective value logged as `selfplay/root_exploration_eps`.
+   `submit_specialist.sh` ships `[[0,0.25],[500000,0.05]]`, bottoming out where
+   its temperature schedule does.
+
+   **`submit_curriculum.sh` was deliberately left unchanged**, so T7 still runs
+   constant eps=0.25 unless the schedule is passed explicitly:
+   `'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'` is the grid
+   matching its temperature schedule. Decide this before launching T7 — it is
+   the one knob that differs between the arms otherwise.
 2. **Raise self-play `mcts.num_simulations`** 50 → 100+. Sharper visit
    distributions are the direct fix for a policy head sitting near uniform —
    the training *target* is currently too diffuse. Costs throughput; the
@@ -475,6 +486,13 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-11** — **T2.1 root-Dirichlet anneal landed**
+  (`mcts.root_exploration_eps_schedule`, null by default). Shared
+  piecewise-linear helper `src/muzero/schedules.py` extracted from
+  `MixedBuffer` rather than duplicated; effective eps logged as
+  `selfplay/root_exploration_eps`. Wired into `submit_specialist.sh` only —
+  `submit_curriculum.sh` left on constant eps by decision, so T7 needs the
+  override passed explicitly. `pytest tests/` = 109 passed.
 - **2026-08-11** — **T2.3 stochastic starts landed** (`env.noop_max=30`,
   `env.skip_to_control=true`). Found that *every* level has a ~120-frame
   scripted intro and that `env.reset()` returns an empty info dict — either

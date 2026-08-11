@@ -97,6 +97,17 @@ mcts:
   pb_c_init: 1.25
   dirichlet_alpha: 0.25
   root_exploration_eps: 0.25
+  # T2.1 anneal: [[train_step, eps], ...] knots, linearly interpolated and
+  # clamped outside the range, in RL-phase train steps (the imitation pretrain
+  # offset is already subtracted from the workers' step counter). null keeps
+  # root_exploration_eps constant, which is what every run before 2026-08-11
+  # did — and T1 showed that with eps pinned at 0.25 the policy head is never
+  # forced to stand on its own, so `selfplay/completion_rate_100ep` is not an
+  # honest estimate of deployed performance. It matters most for T6/T8, where
+  # the specialists become distillation teachers.
+  # Sized per run like selfplay.temperature_schedule — see submit_specialist.sh
+  # (single level) and submit_curriculum.sh (12 levels) for the concrete grids.
+  root_exploration_eps_schedule: null
 
 buffer:
   capacity_transitions: 300_000

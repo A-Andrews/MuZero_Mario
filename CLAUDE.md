@@ -183,7 +183,7 @@ This is a distributed MuZero implementation. The big-picture flow has three conc
 
 The coordinator (`src/selfplay/coordinator.py`) owns the queues/pipes and wires (1)+(2)+(3) together. It also runs replay-evaluation rollouts (`src/selfplay/replay_eval.py`) at each checkpoint to upload mp4s as `wandb.Video`.
 
-Replay buffer (`src/muzero/buffer.py`) is a prioritized trajectory buffer; ingested trajectories keep the worker-computed per-step priorities. Targets (n-step value bootstrap, reward sequence, MCTS policy) are computed in `src/muzero/targets.py` with help from `src/muzero/returns.py`; with `muzero.reanalyze` on, `build_reanalyze_targets` additionally emits bootstrap observations + discount factors so the learner recomputes value targets against a lagged target net at sample time. Action-selection temperature schedule lives in `src/muzero/temperature.py`.
+Replay buffer (`src/muzero/buffer.py`) is a prioritized trajectory buffer; ingested trajectories keep the worker-computed per-step priorities. Targets (n-step value bootstrap, reward sequence, MCTS policy) are computed in `src/muzero/targets.py` with help from `src/muzero/returns.py`; with `muzero.reanalyze` on, `build_reanalyze_targets` additionally emits bootstrap observations + discount factors so the learner recomputes value targets against a lagged target net at sample time. Action-selection temperature schedule lives in `src/muzero/temperature.py` (piecewise **constant** — steps down at thresholds). `src/muzero/schedules.py` is the piecewise-**linear** counterpart shared by `imitation.mix_ratio_schedule` and `mcts.root_exploration_eps_schedule`.
 
 Environment wrappers (`src/env/`) are ported from `ppo_study` — stable-retro NES emulation (`emulation.py`), Mario action set (`mario_actions.py`), and frame preprocessing (`preprocess.py`). The level list is configured via `env.levels` and corresponds to state files in `mario.stimuli/`.
 
@@ -202,6 +202,19 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
 - `training.{lr,lr_min,lr_warmup_steps,lr_decay_steps}` — warmup + cosine-to-floor LR schedule. **Do not reintroduce multiplicative StepLR decay** — it silently drove the LR to 1e-9 by step 600k on a 2-day run and froze learning.
 - `training.weight_broadcast_every` — how often the learner's weights are pushed into the inference server.
 - `env.done_on_life_loss` — episode ends on first death (true terminal, crisp credit assignment); `env.completion_bonus` — raw reward on stage advance (pre-/10 scaling).
+- `mcts.root_exploration_eps_schedule` — **root-Dirichlet anneal** (T2.1).
+  `[[train_step, eps], ...]` knots, linearly interpolated, clamped outside the
+  range; `null` (the default) keeps `mcts.root_exploration_eps` constant, which
+  is what every run before 2026-08-11 did. Thresholds are RL-phase train steps —
+  the coordinator already subtracts the imitation pretrain offset from the
+  workers' counter, so no manual offset is needed. Size it per run alongside
+  `selfplay.temperature_schedule` (`submit_specialist.sh` uses
+  `[[0,0.25],[500000,0.05]]`, bottoming out where temperature does). Why it
+  matters: with eps pinned at 0.25 the policy head is never forced to stand on
+  its own, so `selfplay/completion_rate_100ep` overstates deployed performance —
+  survivable for a specialist you always evaluate with noise on, fatal for T8,
+  where those checkpoints become distillation teachers. The effective value is
+  logged as `selfplay/root_exploration_eps`; read completion rate against it.
 - `env.noop_max` / `env.skip_to_control` — **stochastic starts**. NES Mario is
   otherwise fully deterministic, which made every greedy rollout a single
   trajectory rather than a sample (the T1 sweep's eval cells were all n=1 and

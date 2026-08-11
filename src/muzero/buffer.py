@@ -19,6 +19,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Tuple
 
+from src.muzero.schedules import validate_schedule, value_at
+
 import numpy as np
 
 from src.muzero.targets import build_reanalyze_targets, build_targets
@@ -298,14 +300,7 @@ class MixedBuffer:
 
     @staticmethod
     def _validate_schedule(schedule):
-        if not schedule:
-            return None
-        pts = [(int(s), float(r)) for s, r in schedule]
-        assert all(0.0 <= r <= 1.0 for _, r in pts), f"schedule ratios must be in [0,1]: {pts}"
-        assert all(
-            pts[i][0] < pts[i + 1][0] for i in range(len(pts) - 1)
-        ), f"schedule steps must be strictly ascending: {pts}"
-        return pts
+        return validate_schedule(schedule, lo=0.0, hi=1.0)
 
     def force_mix_ratio(self, ratio: float | None):
         """Pin the effective ratio regardless of constant/schedule (None clears)."""
@@ -317,15 +312,7 @@ class MixedBuffer:
             return self._forced_ratio
         if not self.mix_schedule:
             return self.mix_ratio
-        pts = self.mix_schedule
-        if train_step <= pts[0][0]:
-            return pts[0][1]
-        for (s0, r0), (s1, r1) in zip(pts, pts[1:]):
-            # Strict < so knot steps fall through and return their stored
-            # ratio exactly (no float interpolation residue).
-            if train_step < s1:
-                return r0 + (r1 - r0) * (train_step - s0) / (s1 - s0)
-        return pts[-1][1]
+        return value_at(train_step, self.mix_schedule)
 
     # -- ingestion / sizing (self-play side) -----------------------------------
 

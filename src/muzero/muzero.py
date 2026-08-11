@@ -365,6 +365,12 @@ class MuzeroLearner:
                         f"selfplay/mcts_prior_entropy/{lv}": status.get("mcts_prior_entropy_mean", 0.0),
                         f"selfplay/mcts_visit_entropy/{lv}": status.get("mcts_visit_entropy_mean", 0.0),
                         f"selfplay/mcts_visit_max_frac/{lv}": status.get("mcts_visit_max_frac_mean", 0.0),
+                        # Effective root-Dirichlet fraction (T2.1 anneal). Read
+                        # the completion rate against this: a rate that holds up
+                        # as eps decays is the policy head standing on its own.
+                        "selfplay/root_exploration_eps": status.get(
+                            "root_exploration_eps", 0.0
+                        ),
                         f"selfplay/completed/{lv}": 1.0 if completed else 0.0,
                         "selfplay/completion_rate_100ep": completion_rate,
                     },

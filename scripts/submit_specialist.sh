@@ -17,6 +17,16 @@
 # training.lr_decay_steps, left at the conf default of 400_000, which is what
 # those runs used.
 #
+# Two deliberate departures from the diag recipe, both from T1 (2026-08-11):
+#   - env.noop_max/skip_to_control (T2.3) come from the conf defaults, so
+#     these runs have stochastic starts and the diag runs did not. Episode
+#     lengths therefore are not comparable, completion rates still are.
+#   - the root-Dirichlet anneal (T2.1) below decays eps 0.25 -> 0.05 by train
+#     step 500K, where the temperature schedule bottoms out. Without it the
+#     policy head is never forced to stand on its own — which is survivable
+#     for a specialist you always evaluate with noise on, but fatal for T8,
+#     since these checkpoints are the distillation teachers.
+#
 # Usage:
 #   bash scripts/submit_specialist.sh <LEVEL> [N_LEGS] [extra overrides...]
 #   bash scripts/submit_specialist.sh Level1-1 2
@@ -65,5 +75,6 @@ bash "$(dirname "$0")/submit_chain.sh" "${RUN_NAME}" "${N_LEGS}" \
     selfplay.num_workers=32 \
     training.total_env_steps=15_000_000 \
     'selfplay.temperature_schedule=[[0,1.0],[100000,0.5],[300000,0.25],[500000,0.1]]' \
+    'mcts.root_exploration_eps_schedule=[[0,0.25],[500000,0.05]]' \
     ++wandb.job_type=specialist \
     "$@"

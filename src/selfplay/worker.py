@@ -27,6 +27,7 @@ from src.env.env import create_train_env
 from src.muzero.buffer import Trajectory
 from src.muzero.mcts import MCTS
 from src.muzero.returns import compute_n_step_returns
+from src.muzero.schedules import validate_schedule, value_at
 from src.muzero.temperature import temperature_for_step
 from src.selfplay.inference_server import RemoteNetwork
 
@@ -115,6 +116,13 @@ def selfplay_worker(
     )
 
     temperature_schedule = list(cfg["selfplay"]["temperature_schedule"])
+    # Root-Dirichlet anneal (T2.1). None keeps mcts.root_exploration_eps
+    # constant, which is the historical behaviour. Thresholds are in RL-phase
+    # train steps, matching the temperature schedule — the coordinator already
+    # subtracts any imitation pretrain offset from train_step_val.
+    eps_schedule = validate_schedule(
+        cfg["mcts"].get("root_exploration_eps_schedule"), lo=0.0, hi=1.0
+    )
 
     obs = env.reset()
     ep_obs, ep_actions, ep_rewards, ep_policies, ep_root_q = [], [], [], [], []
@@ -127,6 +135,10 @@ def selfplay_worker(
     while True:
         step = int(train_step_val.value)
         temperature = temperature_for_step(step, temperature_schedule)
+        if eps_schedule is not None:
+            # MCTS reads this attribute at run() time, so mutating it here is
+            # what makes the anneal take effect on the next search.
+            mcts.root_exploration_eps = value_at(step, eps_schedule)
 
         search_stats = {}
         action, pi_prob, root_q = mcts.run(
@@ -181,6 +193,10 @@ def selfplay_worker(
                         "mcts_prior_entropy_mean": float(np.mean(ep_prior_h)) if ep_prior_h else 0.0,
                         "mcts_visit_entropy_mean": float(np.mean(ep_visit_h)) if ep_visit_h else 0.0,
                         "mcts_visit_max_frac_mean": float(np.mean(ep_visit_max)) if ep_visit_max else 0.0,
+                        # Effective root-noise fraction this episode ran at, so
+                        # the anneal is visible in wandb rather than inferred
+                        # from the config.
+                        "root_exploration_eps": float(mcts.root_exploration_eps),
                         "completed": bool(info.get("level_complete", False)),
                         "train_step": step,
                     }
