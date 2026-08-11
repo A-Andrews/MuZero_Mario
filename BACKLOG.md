@@ -1,13 +1,16 @@
 # MuZero-Mario backlog
 
-**Status: T1 running as of 2026-07-29; the T6-T8 experiment program is planned
-and gated on it.** The two eval sweeps are queued on SLURM (jobs **5825183**
-Level1-2, **5825184** Level1-1, 3h wall each). VGDL still holds priority for
-everything else. Both diagnostic runs finished cleanly; no work is at risk.
+**Status: T1 has landed (2026-08-11) and its answer is level-dependent.** Root
+Dirichlet noise is load-bearing on Level1-2 and is *pure cost* on Level1-1,
+where the fully-greedy policy completes. Three follow-up jobs are queued
+(**5989666** the 1-1 fill-in, **5989667**/**5989669** greedy checkpoint scans).
+VGDL still holds priority for everything else; both diagnostic runs finished
+cleanly and no work is at risk.
 
-Next action: **read the T1 results** when the jobs land, then pick T2 or T3 by
-the decision table under T1. That unblocks T6-T8, the ~1,030 GPU-hour program
-at the bottom of this file.
+Next action: **read the checkpoint scans** (5989667/5989669). They decide
+whether the "greedy eval completes 0" premise that gates T2/T6-T8 was a real
+policy defect or an artefact of a 15-sample, single-trajectory metric — see
+"The open problem" below, which T1 has substantially rewritten.
 
 ---
 
@@ -15,18 +18,55 @@ at the bottom of this file.
 
 | Run | Steps | Peak self-play completion | Greedy replay | Status |
 |---|---|---|---|---|
-| `level1-1-diag-v1` | 15M / 780K train | **0.84** @ step 696K | **0** at every checkpoint | done 2026-07-18 |
-| `level1-2-diag-v1` | 15M / 763K train | **0.68** @ step 698K | **0** at every checkpoint | done 2026-07-21 |
-| T1 eval sweep (both levels) | — | — | — | **submitted 2026-07-29**, jobs 5825183/5825184 |
+| `level1-1-diag-v1` | 15M / 780K train | **0.84** @ step 696K | 0/15 in-training evals; **completes off `best.pt`** (T1) | done 2026-07-18 |
+| `level1-2-diag-v1` | 15M / 763K train | **0.68** @ step 698K | **1/15** in-training evals (step 501K) | done 2026-07-21 |
+| T1 eval sweep Level1-2 | — | — | — | **done**, job 5825183, 18/18 cells |
+| T1 eval sweep Level1-1 | — | — | — | **done**, job 5825184, TIMEOUT, 14/18 cells |
+| T1 fill-in (1-1, `pb_c`=2.5) | — | — | — | **queued 2026-08-11**, job 5989666 |
+| Greedy checkpoint scans | — | — | — | **queued 2026-08-11**, jobs 5989667 (1-1) / 5989669 (1-2) |
 | `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**, blocked on T2 |
 
 The discount fix (0.997 → 0.999 + `completion_bonus` 200) is confirmed and is
 what unlocked completions at all; every pre-fix run was ≤4%.
 
-### The open problem
+### The open problem (**rewritten 2026-08-11 — T1 refuted half of it**)
 
-Greedy replay eval completes 0 on both levels while noisy self-play completes
-59-84%. The cause is narrowed down:
+T1 says the answer is **level-dependent**, and it also found the metric that
+posed the question is a much weaker instrument than assumed.
+
+**On Level1-1 the premise is simply false.** Off `best.pt`, the fully-greedy
+cell (eps=0, temp=0, `pb_c`=1.25) *completes the level*, and every perturbation
+degrades it monotonically — noise and temperature alike. Nothing is
+load-bearing here except the search itself.
+
+**On Level1-2 the premise holds.** Greedy is 0 at both `pb_c` values, and at
+temp 0 the completion rate climbs with noise alone (0 → 0.25 → 0.45 at
+`pb_c`=1.25; 0 → 0.30 → 0.55 at 2.5). The greedy failure is a deadlock, not a
+death: `pb_c`=1.25 greedy burns all 2000 steps stuck at `final_x`=482.
+
+**Three corrections to what this file previously asserted:**
+
+1. "Greedy replay 0 at every checkpoint" was wrong for Level1-2 — it logged
+   `completed=1` at train step **501,156** (return 295.7, length 1800).
+2. The in-training greedy eval runs on `training.replay_every_train_steps` =
+   **50,000**, not `save_every` — so it is **15 single deterministic
+   trajectories** across a 780K-step run, one 0/1 sample per ~50K steps. That
+   is far too sparse to support "0 at every checkpoint" as a claim about the
+   policy.
+3. The Level1-1 contradiction is *not* a simulation-count artefact. Both diag
+   runs were launched with `mcts.num_simulations=50` (see their
+   `.hydra/overrides.yaml`), so the in-training eval used 50 sims too — the
+   same as the sweep. What differs is the **weights**: `best.pt` is train step
+   696,189, the nearest in-training eval was step 701,222 and hit the 2000-step
+   cap without completing. 5K training steps apart, opposite outcomes.
+
+Jobs 5989667/5989669 scan that one greedy cell across every retained checkpoint
+to see whether greedy completion is a stable property or a knife-edge. A
+related knife-edge is already visible in T1: Level1-1 greedy is 1.00 at
+`pb_c`=1.25 and 0.00 at `pb_c`=2.5.
+
+**What survives from the original diagnosis** (the reasoning below still holds,
+and still explains Level1-2):
 
 - By the end of both runs the self-play temperature schedule was already at
   **0.1** (`[[0,1],[100000,0.5],[300000,0.25],[500000,0.1]]`), i.e. visits^10 —
@@ -44,7 +84,11 @@ Greedy replay eval completes 0 on both levels while noisy self-play completes
 
 Read: root noise is not just exploring, it is carrying the performance. The
 0.59 rate is partly randomized search through a chokepoint rather than a policy
-that knows the answer.
+that knows the answer. **Scope (2026-08-11): T1 confirms this for Level1-2 and
+refutes it for Level1-1**, where greedy off `best.pt` completes and noise only
+costs. Both levels' policy heads are near-uniform by the CE numbers above, so
+the near-uniform prior evidently is not by itself disqualifying — it is
+survivable on a level with no hard chokepoint.
 
 Level1-2's greedy failure is concrete: dies at x=850 (~25% in) into a cluster of
 three Koopas, at frame ~250/283 of
@@ -52,7 +96,7 @@ three Koopas, at frame ~250/283 of
 
 ---
 
-## T1 — Run the eval sweep (**submitted 2026-07-29 — awaiting results**)
+## T1 — Run the eval sweep (**done 2026-08-11 — results below**)
 
 Code committed in `684e829` (82/82 tests pass, smoke-tested). ~1 GPU-hour each.
 Decides which of T2/T3 is worth doing, and whether the curriculum run should
@@ -72,7 +116,49 @@ Results will land in `outputs/eval_sweep/Level1-2_level1-2-diag-v1_5825183/`
 and `outputs/eval_sweep/Level1-1_level1-1-diag-v1_5825184/`; logs in
 `logs/muzero_eval_sweep-{5825183,5825184}.{out,err}`.
 
-**Results: _pending — fill in when the jobs land._**
+**Results (2026-08-11).** Job 5825183 (Level1-2) COMPLETED in 2:47:36, all 18
+cells. Job 5825184 (Level1-1) **TIMEOUT at the 3h wall with 14/18 cells** —
+benign, but the wall time was budgeted off Level1-2 episode lengths and the
+Level1-1 greedy cells survive to the 2000-step cap, 3-4× longer. Missing cells
+are all of `pb_c`=2.5 × eps=0.25, plus `pb_c`=2.5/eps=0.1/temp=0.25;
+resubmitted as job **5989666**.
+
+Completion rate, **Level1-1** at `pb_c_init`=1.25 (`best.pt`, step 696,189):
+
+| eps \ temp | 0 | 0.1 | 0.25 |
+|---|---|---|---|
+| **0** | **1.00** (deterministic) | 0.70 | 0.35 |
+| **0.1** | 0.80 | 0.65 | 0.55 |
+| **0.25** | 0.70 | 0.50 | 0.50 |
+
+Greedy completes; every perturbation degrades it, monotonically in both axes.
+At `pb_c`=2.5 the greedy cell instead fails (2000-step cap, `final_x`=2914)
+while the noisy cells sit at 0.45-0.80.
+
+Completion rate, **Level1-2** at `pb_c_init`=1.25 (`best.pt`, step 698,817):
+
+| eps \ temp | 0 | 0.1 | 0.25 |
+|---|---|---|---|
+| **0** | **0.00** (deterministic) | 0.40 | 0.30 |
+| **0.1** | 0.25 | 0.45 | 0.35 |
+| **0.25** | 0.45 | 0.30 | 0.25 |
+
+Greedy is 0 at both `pb_c` values. `pb_c`=2.5 is mildly better overall (best
+cells 0.55) but does **not** rescue the greedy cell.
+
+**Two caveats when reading `summary.csv`.** Deterministic cells are n=1: the
+env has no stochasticity, so 1.00 there means "this one trajectory finishes",
+which is exact rather than an estimate — but the `ci95_lo`/`ci95_hi` columns on
+those rows are Wilson intervals on n=1 (0.2065-1.0) and are meaningless. Do not
+quote them. And single-trajectory cells are knife-edges: 1-1 greedy flips from
+1.00 to 0.00 on `pb_c_init` alone.
+
+**Against the decision table below**: outcome 1 (noise is a crutch) holds for
+Level1-2 only; outcome 2 (`pb_c`=2.5 rescues greedy) is refuted on both levels;
+outcome 3 does not apply. So **T2.1 (eps anneal) is justified, but its value is
+level-dependent** — it is the fix for the Level1-2 chokepoint and is close to a
+no-op cost on Level1-1. That matters for T6/T8, where a single global eps
+schedule is applied to all 12 specialists.
 
 Grid: eps {0, 0.1, 0.25} × temperature {0, 0.1, 0.25} × `pb_c_init` {1.25, 2.5},
 20 episodes/cell with Wilson 95% intervals. Noise-free + argmax cells are
@@ -195,9 +281,12 @@ forces the policy head to stand on its own — then launch T6/T7.
   plus whatever T2 lands. Every arm uses the same one so the comparison is
   clean.
 - **Evaluation**: score every arm with the `eval_sweep.py` grid, **not** with
-  greedy `replay/<level>_completed`. That metric reads 0 on models with 0.84
-  self-play completion, so it cannot rank these arms. Report completion rates
-  with Wilson 95% intervals, at matched eps/temperature across arms.
+  greedy `replay/<level>_completed`. Reinforced by T1 (2026-08-11): that metric
+  is **one deterministic trajectory every 50K train steps** — 15 samples per
+  run — so it is a knife-edge probe, not an estimator, and it disagreed with a
+  matched-settings sweep off `best.pt` on Level1-1. Report completion rates
+  with Wilson 95% intervals, at matched eps/temperature across arms, and note
+  that the deterministic cells are exact-but-n=1 (ignore their CI columns).
 - **Model size**: student and specialists all `muzero_mario_medium` (192ch/10).
   Keeps T8 an honest test of whether one net of *fixed* capacity absorbs 12
   specialists, rather than a capacity story. `muzero_atari` is the fallback only
@@ -362,6 +451,22 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-11** — Follow-ups queued: **5989666** (Level1-1 fill-in for the 4
+  cells 5825184 lost to the wall, 4h), **5989667**/**5989669** (greedy
+  checkpoint scans on 1-1/1-2 via the new
+  `scripts/submit_greedy_ckpt_scan.sh`). The scans exist because the
+  greedy-completes-0 premise rests on only 15 single deterministic
+  trajectories per run, and `best.pt` (step 696,189) completes Level1-1
+  greedily while the in-training eval 5K steps later did not.
+- **2026-08-11** — **T1 results read.** Answer is level-dependent: greedy
+  completes Level1-1 and every perturbation hurts; greedy is 0 on Level1-2 and
+  noise alone recovers 0.45-0.55. Job 5825183 clean (18/18 cells), 5825184
+  TIMEOUT (14/18). Also corrected two long-standing claims in this file —
+  Level1-2 greedy replay was **not** 0 at every checkpoint (completed=1 at
+  step 501,156), and the in-training greedy eval runs every
+  `replay_every_train_steps`=50K, i.e. 15 samples per run, not per checkpoint.
+  The sims-mismatch hypothesis was checked and **ruled out**: both diag runs
+  used `mcts.num_simulations=50`, matching the sweep.
 - **2026-07-29** — Experiment program T6-T8 planned (specialists → curriculum
   ±human → distillation). All three gated on T1/T2 by decision, because
   distilling a noise-dependent teacher would poison T8. ~1,030 GPU-h estimated.
