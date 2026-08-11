@@ -7,10 +7,19 @@ where the fully-greedy policy completes. Three follow-up jobs are queued
 VGDL still holds priority for everything else; both diagnostic runs finished
 cleanly and no work is at risk.
 
-Next action: **read the checkpoint scans** (5989667/5989669). They decide
-whether the "greedy eval completes 0" premise that gates T2/T6-T8 was a real
-policy defect or an artefact of a 15-sample, single-trajectory metric — see
-"The open problem" below, which T1 has substantially rewritten.
+T2 is closed (T2.1 anneal + T2.3 stochastic starts landed; T2.2 more-sims has
+evidence against it from two directions) and **T6 is running** — 12 specialists
+× 2 chained legs, jobs 5990729-5990752.
+
+Next actions, in order:
+1. **Read the checkpoint scans** (5989667/5989669) — they decide whether the
+   "greedy eval completes 0" premise was a real policy defect or an artefact
+   of a 15-sample, single-trajectory metric. See "The open problem" below,
+   which T1 has substantially rewritten.
+2. **Read `bench-2gpu`** (5989959) — the 2-GPU split and 64-worker throughput
+   have never run in production and T7 commits ~384 GPU-h to them.
+3. **Decide whether T7's arms get the eps anneal** before launching them;
+   `submit_curriculum.sh` is still on constant eps=0.25 by decision (T2.1).
 
 ---
 
@@ -24,7 +33,9 @@ policy defect or an artefact of a 15-sample, single-trajectory metric — see
 | T1 eval sweep Level1-1 | — | — | — | **done**, job 5825184, TIMEOUT, 14/18 cells |
 | T1 fill-in (1-1, `pb_c`=2.5) | — | — | — | **queued 2026-08-11**, job 5989666 |
 | Greedy checkpoint scans | — | — | — | **queued 2026-08-11**, jobs 5989667 (1-1) / 5989669 (1-2) |
-| `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**, blocked on T2 |
+| T6 specialists (12 levels) | — | — | — | **launched 2026-08-11**, jobs 5990729-5990752 (12 × 2 legs) |
+| `bench-2gpu` (T4 benchmark leg) | — | — | — | **queued 2026-08-11**, job 5989959 |
+| `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**; unblocked, pending the bench leg + the T7 eps decision |
 
 The discount fix (0.997 → 0.999 + `completion_bonus` 200) is confirmed and is
 what unlocked completions at all; every pre-fix run was ≤4%.
@@ -486,6 +497,11 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-11** — **T6 launched**: 12 specialists × 2 chained legs (jobs
+  5990729-5990752) via `submit_specialist.sh`, carrying T2.1 + T2.3. Smoke
+  test (full pipeline, CPU, both new knobs on) passed first. VGDL is finished,
+  so MuZero has priority again. T7 still held on the `bench-2gpu` result and
+  the decision about whether its arms get the eps anneal.
 - **2026-08-11** — **T2.1 root-Dirichlet anneal landed**
   (`mcts.root_exploration_eps_schedule`, null by default). Shared
   piecewise-linear helper `src/muzero/schedules.py` extracted from
