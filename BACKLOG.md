@@ -1,17 +1,30 @@
 # MuZero-Mario backlog
 
-**Status: T1 has landed (2026-08-11) and its answer is level-dependent.** Root
-Dirichlet noise is load-bearing on Level1-2 and is *pure cost* on Level1-1,
-where the fully-greedy policy completes. Three follow-up jobs are queued
-(**5989666** the 1-1 fill-in, **5989667**/**5989669** greedy checkpoint scans).
-VGDL still holds priority for everything else; both diagnostic runs finished
-cleanly and no work is at risk.
+**Status (2026-08-11): MuZero has priority again — VGDL is finished and its two
+stranded jobs were cancelled. T1 has landed, T2 is closed, and T6 is
+submitted.**
 
-T2 is closed (T2.1 anneal + T2.3 stochastic starts landed; T2.2 more-sims has
-evidence against it from two directions) and **T6 is running** — 12 specialists
-× 2 chained legs, jobs 5990729-5990752.
+- **T1's answer is level-dependent.** Root Dirichlet noise is load-bearing on
+  Level1-2 and is *pure cost* on Level1-1, where the fully-greedy policy
+  completes. It also showed the greedy replay metric to be a 15-sample,
+  single-trajectory probe rather than an estimator.
+- **T2 is closed.** T2.1 (eps anneal) and T2.3 (stochastic starts) landed;
+  T2.2 (more sims) has evidence against it from two independent directions and
+  is deprioritised rather than done.
+- **T6 is submitted** — 12 specialists × 2 chained legs, jobs 5990729-5990752.
+
+**Nothing has started yet.** All 28 MuZero jobs sat `PENDING` at the time of
+writing (the cluster is fully backed up), so every number below is still from
+the July diag runs. Queue: 24 specialists + `bench-2gpu` (5989959) + the three
+T1 follow-ups (5989666/5989667/5989669).
 
 Next actions, in order:
+0. **Sanity-check the first specialist that starts** before all 12 burn wall
+   time: `selfplay/root_exploration_eps` should decay 0.25 → 0.05 by train step
+   500K, and episode lengths should sit ~30 agent steps below the diag runs'
+   (the title card now leaves the trajectory). Both mechanisms are new and have
+   never run in production self-play — the smoke test covered the code paths,
+   not 32 workers for 36 hours.
 1. **Read the checkpoint scans** (5989667/5989669) — they decide whether the
    "greedy eval completes 0" premise was a real policy defect or an artefact
    of a 15-sample, single-trajectory metric. See "The open problem" below,
@@ -251,21 +264,26 @@ Ranked. All are config/schedule-level except the third.
   for the exact behavior wanted, though the 153K human steps still help
   representation learning.
 
-## T4 — The curriculum run (blocked on T1/T2)
+## T4 — The curriculum run (unblocked; benchmark leg queued)
 
 `scripts/submit_curriculum.sh` was written 2026-07-20 and committed in `ed4808d`
-but **never submitted**. 12 levels, 60M env steps, 4 chained 24h legs, 2 GPUs,
-64 workers, 1M buffer.
+but **still never submitted**. 12 levels, 60M env steps, 4 chained 24h legs,
+2 GPUs, 64 workers, 1M buffer.
 
-**Do not launch as-is.** It bakes in `eps=0.25` forever and 50 sims — exactly
-the configuration T1 is testing. Rerun the header's recipe after T2 lands.
-
-When it does go out, run the benchmark leg first — the 2-GPU split and the
-64-worker throughput have never run in production:
+The benchmark leg is queued as job **5989959** — the 2-GPU split and the
+64-worker throughput have never run in production, and T7 commits ~384 GPU-h
+to them. It also now exercises the T2.3 env, since SLURM reads the working
+tree at run time:
 
 ```bash
 bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000
 ```
+
+**Two things to settle before the real chain goes out.** The `eps=0.25`-forever
+objection is now fixable but *not fixed* — `submit_curriculum.sh` was left
+unchanged by decision, so the schedule must be passed explicitly (see T2.1).
+The 50-sims objection is withdrawn: T1 found `pb_c_init`, not simulation count,
+is what flips outcomes, and the July 20 sweep found 50/200/400 bit-identical.
 
 ## T5 — Housekeeping
 
@@ -303,19 +321,26 @@ Planned 2026-07-29. Three arms, run in this order because each feeds the next:
 T7 and T6 are independent of each other and can run concurrently if the
 cluster has the GPUs; T8 cannot start until T6's checkpoints exist.
 
-### Why all three block on T1/T2
+### Why all three blocked on T1/T2 (**resolved 2026-08-11**)
 
-Decided 2026-07-29: do **not** launch on the current recipe. The open problem
-above says root Dirichlet noise, not the policy head, is carrying the 0.59-0.84
-self-play completion rate. That is survivable for a specialist you only ever
-evaluate with noise on, but it is fatal for **T8** — the teachers' stored visit
-distributions are what the student imitates, and a near-uniform teacher policy
-distils into a near-uniform student policy. Distilling before T2 lands risks
-spending the whole ~1,000 GPU-hour program measuring the noise artefact.
+Decided 2026-07-29: do **not** launch on the then-current recipe. Root
+Dirichlet noise, not the policy head, was carrying the 0.59-0.84 self-play
+completion rate. Survivable for a specialist you only ever evaluate with noise
+on, fatal for **T8** — the teachers' stored visit distributions are what the
+student imitates, and a near-uniform teacher distils into a near-uniform
+student. Launching before T2 risked spending ~1,000 GPU-hours measuring the
+noise artefact.
 
-So: read T1 (jobs 5825183/5825184, already queued), apply the T2 fixes it
-justifies — the eps anneal (T2.1) is the one that matters here, since it is what
-forces the policy head to stand on its own — then launch T6/T7.
+**Discharged.** T1 read (level-dependent: noise load-bearing on 1-2, pure cost
+on 1-1), T2.1 landed so the teachers' eps decays to 0.05 rather than sitting at
+0.25 forever, T2.3 landed so the numbers are estimates rather than single
+trajectories. T6 launched on that basis.
+
+**T7 is the remaining exposure**: `submit_curriculum.sh` still runs constant
+eps=0.25 by decision, so if it launches as-is its arms differ from T6's
+specialists on exactly the knob this section says matters. Either pass
+`'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'` or record the
+mismatch deliberately — do not let it happen by default.
 
 ### Shared decisions across all three arms
 
@@ -351,26 +376,34 @@ Measured from `level1-2-diag-v1`: jobs 5727109 (24h, TIMEOUT) + 5727110
 
 ---
 
-## T6 — The specialist fleet (blocked on T1/T2)
+## T6 — The specialist fleet (**submitted 2026-08-11**)
 
 12 single-level runs, 15M env steps each, matching the diag-run budget so the
-results are directly comparable to `level1-1-diag-v1` (0.84) and
-`level1-2-diag-v1` (0.68).
+results are comparable to `level1-1-diag-v1` (0.84) and `level1-2-diag-v1`
+(0.68). Jobs **5990729-5990752**, run dirs `outputs/runs/spec-<level>/`.
 
-**Blocker — `submit_all_levels.sh` cannot do this as written.** It submits one
-*unchained* `submit_single_level.sh` job per level, and that script sets no
-`run_name`, so it cannot auto-resume. At 24h wall and ~36h of work per level,
-every run would die two-thirds finished with no resume path. Needs a chained
-per-level submitter — `submit_chain.sh` already has the mechanism, but it calls
-`submit_autocurriculum.sh`; the per-level variant needs `env.levels=[<level>]`,
-`autocurriculum.enabled=false` and `run_name=spec-<level>`.
+The blocker is cleared: `submit_all_levels.sh` submitted *unchained*
+`submit_single_level.sh` jobs that set no `run_name` and so could not
+auto-resume — at 24h wall against ~36h of work per level, every run would have
+died two-thirds finished. `scripts/submit_specialist.sh` now wraps
+`submit_chain.sh` with `env.levels=[<level>]`, `autocurriculum.enabled=false`
+and `run_name=spec-<level>`.
 
 ```bash
-# after the new script exists:
-for L in Level1-1 ... Level4-3; do
-    bash scripts/submit_specialist.sh "$L" 2 training.total_env_steps=15_000_000
+for L in Level1-1 Level1-2 Level1-3 Level2-1 Level2-2 Level2-3 \
+         Level3-1 Level3-2 Level3-3 Level4-1 Level4-2 Level4-3; do
+    bash scripts/submit_specialist.sh "$L" 2
 done
 ```
+
+**Two deliberate departures from the diag recipe**, both from T1 — record them
+when reading the results:
+- **Stochastic starts** (T2.3) are on, and the diag runs had none. Completion
+  rates stay comparable; **episode lengths do not** (~30 agent steps of title
+  card left the trajectory).
+- **The eps anneal** (T2.1) decays 0.25 → 0.05 by train step 500K. The diag
+  runs held eps at 0.25 throughout, so a specialist that matches 0.84 is
+  strictly the stronger result — it did it on a decayed noise budget.
 
 Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
@@ -497,6 +530,9 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-11** — VGDL finished; its two stranded jobs (5843779 s3-sync,
+  5843780 readme, both `afterok` behind the failed 5843608 and therefore
+  unrunnable) cancelled. Queue is now MuZero-only.
 - **2026-08-11** — **T6 launched**: 12 specialists × 2 chained legs (jobs
   5990729-5990752) via `submit_specialist.sh`, carrying T2.1 + T2.3. Smoke
   test (full pipeline, CPU, both new knobs on) passed first. VGDL is finished,
