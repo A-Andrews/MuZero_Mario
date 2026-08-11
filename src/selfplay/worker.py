@@ -89,6 +89,8 @@ def selfplay_worker(
             seed=env_seed,
             done_on_life_loss=bool(cfg["env"].get("done_on_life_loss", True)),
             completion_bonus=float(cfg["env"].get("completion_bonus", 100.0)),
+            noop_max=int(cfg["env"].get("noop_max", 0)),
+            skip_to_control=bool(cfg["env"].get("skip_to_control", False)),
         )
 
     current_level = initial_level

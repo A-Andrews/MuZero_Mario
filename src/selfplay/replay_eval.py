@@ -38,6 +38,8 @@ def run_replay_rollout(
     root_exploration_eps: float = 0.0,
     np_seed: Optional[int] = None,
     info_out: Optional[dict] = None,
+    noop_max: int = 0,
+    skip_to_control: bool = False,
 ) -> Tuple[List[np.ndarray], float, int, bool]:
     """Return (raw_rgb_frames, total_return, num_env_steps, level_completed).
 
@@ -55,6 +57,12 @@ def run_replay_rollout(
 
     `np_seed` seeds numpy so a noisy rollout is reproducible; `info_out`, if
     given, is filled with extra per-rollout diagnostics (`final_x`, `timed_out`).
+
+    `noop_max`/`skip_to_control` are the env's stochastic-start knobs and
+    default to **off** here even when training has them on, so a greedy eval
+    stays a single reproducible trajectory and stays comparable to the
+    deterministic-env diag baselines. Turn them on to measure a policy under
+    the same start distribution it was trained on.
     """
     if np_seed is not None:
         np.random.seed(int(np_seed))
@@ -66,6 +74,8 @@ def run_replay_rollout(
         downsample=frame_skip,
         pad_to=pad_to,
         seed=seed,
+        noop_max=noop_max,
+        skip_to_control=skip_to_control,
     )
     recording = False
     rec_env = None

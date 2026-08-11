@@ -30,6 +30,8 @@ def create_train_env(
     seed=2024,
     done_on_life_loss=True,
     completion_bonus=100.0,
+    noop_max=0,
+    skip_to_control=False,
 ):
     world = level[5]  # "Level1-1" -> "1"
     stage = level[7]
@@ -49,6 +51,8 @@ def create_train_env(
         seed=seed,
         done_on_life_loss=done_on_life_loss,
         completion_bonus=completion_bonus,
+        noop_max=noop_max,
+        skip_to_control=skip_to_control,
     )
 
 
@@ -69,7 +73,39 @@ class CustomWrapper:
     death a true terminal (bootstrap value 0) and keeps credit assignment
     crisp; the retro scenario's own done (stage advance / game over) still
     applies.
+
+    ``noop_max`` > 0 enables **stochastic starts**: each reset burns a uniform
+    random 0..noop_max emulator frames on the NOOP action before handing back
+    the first observation. NES Mario is otherwise fully deterministic, which
+    made every eval cell a single trajectory rather than a sample (see T1 in
+    BACKLOG.md) and never pressured the policy to be robust. Mario stands
+    still during the delay, so this costs only those frames of the level
+    timer, but it shifts his phase relative to the frame-counter-driven enemy
+    animation — which is exactly the variation the Level1-2 Koopa cluster
+    needs. 0 disables it and reproduces the old deterministic behaviour.
+
+    ``skip_to_control`` is not optional decoration — without it ``noop_max``
+    does **nothing**. Every level opens with a scripted intro that ignores
+    input (measured: 123 frames on Level1-1, 117 on Level1-2, ``player_state``
+    0 -> 7 -> 8), so a 0..30 frame delay lands entirely inside that window and
+    is absorbed: the state at control onset is bit-identical whatever the
+    draw. With this on, reset advances to ``player_state == 8`` ("player in
+    control") first and randomises from there.
+
+    Two consequences worth knowing. Those intro frames no longer appear in
+    trajectories, so every level loses ~30 agent steps of uncontrollable
+    title card per episode (~31 on Level1-1 at frame_skip 4) — which also
+    feeds the autocurriculum's inverse-length weighting. And the variation
+    the delay buys is largely *unobservable* to the agent: Mario stands still,
+    so the frames barely change, but the emulator's frame counter advances and
+    that is what drives enemy animation phase later in the level. That is the
+    point — it turns a greedy rollout into a distribution instead of a point.
     """
+
+    # Safety cap on the skip-to-control scan (~10s of emulation). No Mario
+    # start state comes close; this only stops a pathological state file from
+    # spinning reset forever.
+    _SKIP_TO_CONTROL_MAX_FRAMES = 600
 
     def __init__(
         self,
@@ -81,6 +117,8 @@ class CustomWrapper:
         seed=2024,
         done_on_life_loss=True,
         completion_bonus=100.0,
+        noop_max=0,
+        skip_to_control=False,
     ):
         self.env = env
         self.n_frame = n_frame
@@ -89,6 +127,8 @@ class CustomWrapper:
         self.player_actions = player_actions
         self.done_on_life_loss = bool(done_on_life_loss)
         self.completion_bonus = float(completion_bonus)
+        self.noop_max = max(0, int(noop_max))
+        self.skip_to_control = bool(skip_to_control)
         # Grayscale 84x84 frames are cached here; we only preprocess each raw
         # frame once (on push) rather than re-grayscaling the whole stack on
         # every _obs() call.
@@ -168,7 +208,7 @@ class CustomWrapper:
         self.curr_score = 0
         self.last_x = 0
         self.last_time = None
-        obs, _ = self.env.reset()
+        obs, info = self.env.reset()
         # Cache the grayscaled initial frame once and duplicate it across the
         # stack, rather than running grayscale/resize n_frame*downsample times.
         self.latest_rgb = obs
@@ -182,7 +222,52 @@ class CustomWrapper:
                 obs, _, _term, _trunc, info = self.env.step(self.player_actions[i])
                 self._push_frame(obs)
                 self.last_info = info
+        elif self.skip_to_control or self.noop_max > 0:
+            self._stochastic_start(info)
         return self._obs()
+
+    def _stochastic_start(self, reset_info):
+        """Advance past any scripted intro, then burn a random NOOP delay.
+
+        See the class docstring for why the two halves are separate. Both
+        loops break on a terminal — standing still at a level start cannot
+        kill Mario, but a state file that spawns him mid-fall would otherwise
+        step a finished episode.
+        """
+        noop = add_unused_buttons(list(complex_movement_to_button_presses(0)))
+        info = reset_info if isinstance(reset_info, dict) else {}
+        done = False
+
+        if self.skip_to_control:
+            # `env.reset()` hands back an *empty* info dict, so the state can
+            # only be read by stepping — this must be a do-while, not a while.
+            for _ in range(self._SKIP_TO_CONTROL_MAX_FRAMES):
+                obs, _reward, term, trunc, info = self.env.step(noop)
+                self._push_frame(obs)
+                if term or trunc:
+                    done = True
+                    break
+                if "player_state" not in info:
+                    break  # variable unavailable — don't burn the whole cap
+                if int(info["player_state"]) == 8:
+                    break
+
+        if self.noop_max > 0 and not done:
+            for _ in range(int(self.rng.integers(0, self.noop_max + 1))):
+                obs, _reward, term, trunc, info = self.env.step(noop)
+                self._push_frame(obs)
+                if term or trunc:
+                    break
+
+        # Adopt the post-delay counters. Without this the first real step
+        # charges the agent for the timer ticks that elapsed while it had no
+        # control — a spurious negative reward proportional to the delay.
+        if info:
+            self.last_time = info["time"]
+            self.last_x = 256 * int(info["player_x_posHi"]) + int(info["player_x_posLo"])
+            self.curr_score = info["score"]
+            self.curr_lives = info["lives"]
+            self.last_info = info
 
     def close(self):
         try:

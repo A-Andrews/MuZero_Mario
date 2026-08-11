@@ -202,6 +202,22 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
 - `training.{lr,lr_min,lr_warmup_steps,lr_decay_steps}` — warmup + cosine-to-floor LR schedule. **Do not reintroduce multiplicative StepLR decay** — it silently drove the LR to 1e-9 by step 600k on a 2-day run and froze learning.
 - `training.weight_broadcast_every` — how often the learner's weights are pushed into the inference server.
 - `env.done_on_life_loss` — episode ends on first death (true terminal, crisp credit assignment); `env.completion_bonus` — raw reward on stage advance (pre-/10 scaling).
+- `env.noop_max` / `env.skip_to_control` — **stochastic starts**. NES Mario is
+  otherwise fully deterministic, which made every greedy rollout a single
+  trajectory rather than a sample (the T1 sweep's eval cells were all n=1 and
+  flipped outcome on single knobs) and never pressured the policy to be robust.
+  Each reset burns a uniform random `0..noop_max` NOOP frames. **The two knobs
+  are a package**: every level opens with a scripted intro that ignores input
+  (measured 123 frames on Level1-1, 117 on Level1-2; `player_state` goes
+  0 → 7 → 8 = "in control"), so with `skip_to_control=false` the whole delay is
+  absorbed and `final_x` is bit-identical across seeds — verified. With it on,
+  trajectories genuinely diverge. Side effect: the intro frames leave the
+  trajectory, so every episode loses ~30 agent steps of uncontrollable title
+  card, which also shifts the autocurriculum's inverse-length weighting.
+  `run_replay_rollout` defaults both **off** regardless of the training config,
+  so greedy eval stays a single reproducible trajectory and stays comparable to
+  the deterministic-env diag baselines; pass them explicitly to evaluate under
+  the training start distribution.
 - `worker.torch_threads` / `learner_torch_threads` — kept at 1 to avoid oversubscription across the worker pool.
 
 ## Level-completion tracking

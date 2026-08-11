@@ -189,11 +189,32 @@ Ranked. All are config/schedule-level except the third.
    distributions are the direct fix for a policy head sitting near uniform —
    the training *target* is currently too diffuse. Costs throughput; the
    untested 2-GPU split is the headroom.
-3. **Stochastic starts** — random 0-30 no-op frames at reset. The env is fully
-   deterministic today, so the policy is never pressured to be robust and
-   greedy eval has zero variance (hence the bit-identical seeds). Standard
-   practice; makes every eval number meaningful. Env-wrapper change in
-   `src/env/env.py:reset`.
+3. **Stochastic starts** — **done 2026-08-11**, and promoted to first because
+   T1's whole interpretive mess (n=1 cells, meaningless Wilson CIs on them,
+   outcomes flipping on `pb_c_init` alone) traces to the deterministic env.
+   `env.noop_max=30` + `env.skip_to_control=true` in `conf/env/mario.yaml`.
+
+   Two things found while building it, both of which would have made a naive
+   implementation a silent no-op:
+   - **Every level opens with a scripted intro**, not just Level1-2 — 123
+     frames on Level1-1, 117 on Level1-2 (`player_state` 0 → 7 → 8). A 0-30
+     frame delay lands entirely inside it and is absorbed, so `noop_max`
+     alone changes nothing: verified `final_x` bit-identical across 6 seeds.
+     Hence `skip_to_control`, which advances to `player_state == 8` first.
+   - **`env.reset()` returns an empty info dict**, so `player_state` can only
+     be read by stepping; the skip has to be a do-while. Both are covered by
+     `tests/test_stochastic_start.py` (stub emulator, no ROM needed).
+
+   Verified against the real emulator: holding right+B for 400 agent steps
+   gives 1 distinct outcome across 6 seeds with the knobs off, and 3 (1-1) /
+   5 (1-2) with them on, Level1-2 `final_x` spreading 184-191.
+
+   **Consequences to carry forward.** Episodes lose ~30 agent steps of
+   uncontrollable title card, which shifts the autocurriculum's inverse-length
+   weighting and makes episode lengths incomparable to the diag runs.
+   `run_replay_rollout` defaults both knobs **off**, so greedy eval stays
+   reproducible and comparable to the 0.84/0.68 baselines — evaluate the new
+   runs both ways.
 
 ## T3 — Capacity / horizon (only if T2 doesn't close the gap)
 
@@ -436,10 +457,13 @@ time; dump to the cap, not beyond it.
 
 ## Incidental findings worth keeping
 
-- **Level1-2 has a ~29-agent-step scripted intro** (Mario descending the
-  entry pipe, ~116 frames) during which `player_x_pos` reads 0 and no reward
-  accrues — ~10% of a typical 300-step episode is uncontrollable. Not a bug,
-  but relevant when reading episode lengths and when setting `max_steps`.
+- **Every level has a scripted intro, not just Level1-2** (corrected
+  2026-08-11 by direct measurement). Level1-1 is 123 frames ≈ 31 agent steps,
+  Level1-2 117 frames ≈ 29, `player_state` running 0 → 7 → 8 ("in control").
+  Input is ignored throughout and `player_x_pos` reads 0, so every episode in
+  every run to date opened with ~30 uncontrollable agent steps. Relevant when
+  reading episode lengths and setting `max_steps`; `env.skip_to_control`
+  (T2.3) now removes them.
 - The login node kills multi-threaded torch (`libgomp: Thread creation failed`).
   Anything beyond a trivial single-threaded script needs `salloc`/`sbatch`;
   `OMP_NUM_THREADS=1` is enough for quick import-level checks.
@@ -451,6 +475,13 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-11** — **T2.3 stochastic starts landed** (`env.noop_max=30`,
+  `env.skip_to_control=true`). Found that *every* level has a ~120-frame
+  scripted intro and that `env.reset()` returns an empty info dict — either
+  one alone would have made the feature a silent no-op. Verified against the
+  real emulator (deterministic: 1 outcome / 6 seeds; on: 3-5). `pytest tests/`
+  = 100 passed. `submit_specialist.sh` written and dry-run verified, clearing
+  T6's code blocker; `bench-2gpu` submitted as job **5989959**.
 - **2026-08-11** — Follow-ups queued: **5989666** (Level1-1 fill-in for the 4
   cells 5825184 lost to the wall, 4h), **5989667**/**5989669** (greedy
   checkpoint scans on 1-1/1-2 via the new

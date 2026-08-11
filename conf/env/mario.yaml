@@ -22,3 +22,16 @@ done_on_life_loss: true
 # Raw reward added when the stage counter advances (level finished), before
 # the /10 scaling — i.e. +10.0 in the agent's reward units.
 completion_bonus: 100.0
+# Stochastic starts (T2.3). NES Mario is otherwise fully deterministic, which
+# makes a greedy rollout a single trajectory rather than a sample — every
+# eval cell in the T1 sweep was n=1 and flipped on single knobs — and never
+# pressures the policy to be robust. Each reset burns a uniform random
+# 0..noop_max frames of NOOP; 0 restores the old deterministic env.
+noop_max: 30
+# Advance to `player_state == 8` ("player in control") before applying that
+# delay. Required for noop_max to do anything on levels with a scripted
+# intro: Level1-2 ignores input for its ~116-frame pipe descent, so noops
+# spent inside that window are absorbed and the control-onset state is
+# identical regardless. Also drops those ~29 uncontrollable agent steps from
+# Level1-2 trajectories, which shortens its episodes.
+skip_to_control: true
