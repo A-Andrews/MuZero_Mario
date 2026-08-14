@@ -48,6 +48,16 @@ That build needs three fixes on this cluster:
   runtime** — the venv is self-contained (cu126 torch wheels, imageio-ffmpeg's static
   ffmpeg). Nodes are 4×GH200 / 288 CPUs / 460G, so one GPU's fair share is 72 CPUs + 110G;
   with that allocation `selfplay.num_workers` can go up to ~64 (default is 20).
+- **Storage: home has a hard 101 GB quota** (`quota -s`; no soft limit, no grace) and
+  hitting it killed the entire first T6 fleet on 2026-08-12 — 12 jobs each writing a
+  271 MB checkpoint every 16 min died simultaneously at their next save boundary with
+  exit 1 and *empty* `.err` files (wandb's console redirect swallowed the tracebacks;
+  `WANDB_CONSOLE=off` is now exported by the submit scripts so this can't recur).
+  `outputs/` is therefore a **symlink to `/projects/u6oz/atdandrews/MuZero_Mario/outputs`**
+  (200 TB Lustre, no quota set) — all run dirs/checkpoints land there via the existing
+  relative paths. Put any new large artifacts under `/projects/u6oz/atdandrews/` too,
+  never on home. `training.checkpoint_keep` (default 10) controls step_*.pt rotation,
+  and a failed checkpoint save now warns and continues instead of killing the run.
 - The human-data scripts (`fetch_human_data.sh`, `replay_human_bk2.sh`,
   `diag_bk2_download.sh`) additionally need `datalad` + `git-annex` on PATH and the
   courtois-neuromod datasets cloned (paths via `MARIO_SCENES_DIR`/`MARIO_ROOT` env vars).

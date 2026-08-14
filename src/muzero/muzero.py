@@ -152,6 +152,7 @@ class MuzeroLearner:
         self.grad_clip = float(tr["grad_clip"])
         self.weight_broadcast_every = int(tr["weight_broadcast_every"])
         self.save_every = int(tr["save_every_train_steps"])
+        self.checkpoint_keep = int(tr.get("checkpoint_keep", 10))
         self.replay_every = self._resolve_replay_every(
             tr.get("replay_every_train_steps", 0), self.save_every
         )
@@ -769,17 +770,30 @@ class MuzeroLearner:
         level1-1-diag-v1 0.72-completion peak rotated away exactly that way.
         wandb logs the event under train/best_completion_rate.
         """
+        prev_best = self._best_completion_rate
         self._best_completion_rate = completion_rate
         self._last_best_save_step = self.training_step
-        save_checkpoint(
-            path=self.ckpt_dir / "best.pt",
-            online_state_dict=self.net.state_dict(),
-            optimizer_state=self.opt.state_dict(),
-            scheduler_state=self.scheduler.state_dict() if self.scheduler is not None else None,
-            training_step=self.training_step,
-            env_step=self.env_step,
-            cfg_snapshot=self.cfg,
-        )
+        try:
+            save_checkpoint(
+                path=self.ckpt_dir / "best.pt",
+                online_state_dict=self.net.state_dict(),
+                optimizer_state=self.opt.state_dict(),
+                scheduler_state=self.scheduler.state_dict() if self.scheduler is not None else None,
+                training_step=self.training_step,
+                env_step=self.env_step,
+                cfg_snapshot=self.cfg,
+            )
+        except OSError as e:
+            # Roll the recorded best back so the next new-high (or even the
+            # same rate again) retries the save instead of best.pt silently
+            # freezing at an older net.
+            self._best_completion_rate = prev_best
+            print(
+                f"[train] WARNING: best.pt save failed at step "
+                f"{self.training_step}: {e} — continuing without saving",
+                flush=True,
+            )
+            return
         (self.ckpt_dir / "best.json").write_text(
             json.dumps(
                 {
@@ -800,17 +814,30 @@ class MuzeroLearner:
         )
 
     def _save_checkpoint(self):
-        self._last_saved_step = self.training_step
         ckpt_path = self.ckpt_dir / f"step_{self.training_step}.pt"
-        save_checkpoint(
-            path=ckpt_path,
-            online_state_dict=self.net.state_dict(),
-            optimizer_state=self.opt.state_dict(),
-            scheduler_state=self.scheduler.state_dict() if self.scheduler is not None else None,
-            training_step=self.training_step,
-            env_step=self.env_step,
-            cfg_snapshot=self.cfg,
-        )
+        try:
+            save_checkpoint(
+                path=ckpt_path,
+                online_state_dict=self.net.state_dict(),
+                optimizer_state=self.opt.state_dict(),
+                scheduler_state=self.scheduler.state_dict() if self.scheduler is not None else None,
+                training_step=self.training_step,
+                env_step=self.env_step,
+                cfg_snapshot=self.cfg,
+            )
+        except OSError as e:
+            # ENOSPC/EDQUOT etc. A missed checkpoint is recoverable (the next
+            # save boundary retries, and _last_saved_step stays stale so
+            # save_final_checkpoint retries too); killing the run is not —
+            # the 2026-08-12 T6 fleet lost 12x2h15 of training to a home-quota
+            # EDQUOT raised here.
+            print(
+                f"[train] WARNING: checkpoint save failed at step "
+                f"{self.training_step}: {e} — continuing without saving",
+                flush=True,
+            )
+            return
+        self._last_saved_step = self.training_step
         latest = self.ckpt_dir / "latest.pt"
         try:
             if latest.is_symlink() or latest.exists():
@@ -818,7 +845,7 @@ class MuzeroLearner:
             latest.symlink_to(ckpt_path.name)
         except OSError:
             pass
-        rotate_checkpoints(self.ckpt_dir, keep=10)
+        rotate_checkpoints(self.ckpt_dir, keep=self.checkpoint_keep)
 
     def _maybe_launch_replay(self):
         if not self.cfg["wandb"].get("log_videos_every_ckpt", True):

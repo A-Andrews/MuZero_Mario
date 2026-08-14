@@ -44,6 +44,10 @@ training:
   # value bootstraps (muzero.reanalyze).
   target_update_every: 200
   save_every_train_steps: 5_000
+  # step_*.pt files kept after rotation (best.pt/latest.pt are unaffected).
+  # Mind the disk budget on parallel fleets: the medium net is ~271 MB/ckpt,
+  # so 12 specialists x keep=10 is ~36 GB of step files alone.
+  checkpoint_keep: 10
   # A replay rollout is a full greedy-MCTS episode on the GPU and contends
   # with the learner, so it runs on its own (sparser) cadence rather than
   # every checkpoint. <=0 falls back to save_every_train_steps.

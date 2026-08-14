@@ -1,38 +1,41 @@
 # MuZero-Mario backlog
 
-**Status (2026-08-11): MuZero has priority again — VGDL is finished and its two
-stranded jobs were cancelled. T1 has landed, T2 is closed, and T6 is
-submitted.**
+**Status (2026-08-14): T6 fleet #1 was killed by the home storage quota ~2h15
+in; storage is migrated to `/projects`, the failure modes are patched, and
+fleet #2 is queued (jobs 6017303-6017326) resuming from the surviving
+checkpoints. All four diagnostic jobs (T1 follow-ups + bench-2gpu) completed
+and are read — results folded in below.**
 
-- **T1's answer is level-dependent.** Root Dirichlet noise is load-bearing on
-  Level1-2 and is *pure cost* on Level1-1, where the fully-greedy policy
-  completes. It also showed the greedy replay metric to be a 15-sample,
-  single-trajectory probe rather than an estimator.
-- **T2 is closed.** T2.1 (eps anneal) and T2.3 (stochastic starts) landed;
-  T2.2 (more sims) has evidence against it from two independent directions and
-  is deprioritised rather than done.
-- **T6 is submitted** — 12 specialists × 2 chained legs, jobs 5990729-5990752.
-
-**Nothing has started yet.** All 28 MuZero jobs sat `PENDING` at the time of
-writing (the cluster is fully backed up), so every number below is still from
-the July diag runs. Queue: 24 specialists + `bench-2gpu` (5989959) + the three
-T1 follow-ups (5989666/5989667/5989669).
+- **T6 fleet #1 died 2026-08-12** — all 12 leg-1 jobs (5990729-5990751, odd)
+  exited 1 simultaneously at their next checkpoint-save boundary: 12 × 271 MB
+  every 16 min blew the **hard 101 GB home quota** (no soft limit, no grace).
+  The `.err` files were empty because wandb's console redirect buffered the
+  tracebacks. ~40K train steps / ~600-860K env steps per run survived on disk.
+- **Fixed 2026-08-14**: `outputs/` is now a symlink to
+  `/projects/u6oz/atdandrews/MuZero_Mario/outputs` (200 TB Lustre, no quota);
+  failed checkpoint saves warn-and-continue instead of killing the run (and
+  clean up their `.tmp`); `training.checkpoint_keep` makes rotation
+  configurable; submit scripts export `WANDB_CONSOLE=off` so the next crash
+  lands in the `.err`. Home is back to 42 GB of 101 GB.
+- **The greedy checkpoint scans landed the verdict** (see "The open problem"):
+  greedy completion is a **knife-edge property of individual checkpoints**,
+  not of the trained policy — and on Level1-2 `best.pt` is greedily *worse*
+  than the final checkpoint. `best.pt` selection is the weak link for T8.
+- **`bench-2gpu` is clean**: 200K env steps in 30 min (~111 env-steps/s) on
+  the 2-GPU split. T7 is unblocked on this axis.
 
 Next actions, in order:
-0. **Sanity-check the first specialist that starts** before all 12 burn wall
-   time: `selfplay/root_exploration_eps` should decay 0.25 → 0.05 by train step
-   500K, and episode lengths should sit ~30 agent steps below the diag runs'
-   (the title card now leaves the trajectory). Both mechanisms are new and have
-   never run in production self-play — the smoke test covered the code paths,
-   not 32 workers for 36 hours.
-1. **Read the checkpoint scans** (5989667/5989669) — they decide whether the
-   "greedy eval completes 0" premise was a real policy defect or an artefact
-   of a 15-sample, single-trajectory metric. See "The open problem" below,
-   which T1 has substantially rewritten.
-2. **Read `bench-2gpu`** (5989959) — the 2-GPU split and 64-worker throughput
-   have never run in production and T7 commits ~384 GPU-h to them.
-3. **Decide whether T7's arms get the eps anneal** before launching them;
+0. **Sanity-check the first fleet-#2 specialist that starts**: it must resume
+   from `latest.pt` (~step 40K) rather than start fresh, and
+   `selfplay/root_exploration_eps` should continue its 0.25 → 0.05 decay.
+   Fleet #1 already validated the fresh-start path (eps anneal + stochastic
+   starts ran 2h15 in production without incident; spec-level3-2 hit 0.14
+   completion by step 42K, ahead of the diag pace).
+1. **Decide whether T7's arms get the eps anneal** before launching them;
    `submit_curriculum.sh` is still on constant eps=0.25 by decision (T2.1).
+2. **Rethink `best.pt` selection before T8** — the scans show the
+   noisy-self-play rolling rate can pick a checkpoint that deadlocks greedily
+   (Level1-2) while a later one completes.
 
 ---
 
@@ -44,10 +47,11 @@ Next actions, in order:
 | `level1-2-diag-v1` | 15M / 763K train | **0.68** @ step 698K | **1/15** in-training evals (step 501K) | done 2026-07-21 |
 | T1 eval sweep Level1-2 | — | — | — | **done**, job 5825183, 18/18 cells |
 | T1 eval sweep Level1-1 | — | — | — | **done**, job 5825184, TIMEOUT, 14/18 cells |
-| T1 fill-in (1-1, `pb_c`=2.5) | — | — | — | **queued 2026-08-11**, job 5989666 |
-| Greedy checkpoint scans | — | — | — | **queued 2026-08-11**, jobs 5989667 (1-1) / 5989669 (1-2) |
-| T6 specialists (12 levels) | — | — | — | **launched 2026-08-11**, jobs 5990729-5990752 (12 × 2 legs) |
-| `bench-2gpu` (T4 benchmark leg) | — | — | — | **queued 2026-08-11**, job 5989959 |
+| T1 fill-in (1-1, `pb_c`=2.5) | — | — | — | **done 2026-08-12**, job 5989666: best cell 0.80 @ eps=0.1/temp=0.1 |
+| Greedy checkpoint scans | — | — | — | **done 2026-08-12**, jobs 5989667 (1-1: greedy completes at 2/11 ckpts) / 5989669 (1-2: last 3 ckpts complete, `best.pt` deadlocks) |
+| T6 fleet #1 (12 levels) | ~40K train / 600-860K env each | 0.14 (3-2), 0.02 (1-1), 0.01 (2-2), 0 others | — | **killed 2026-08-12 by home quota**, jobs 5990729-5990752; checkpoints survive |
+| T6 fleet #2 (12 levels) | — | — | — | **queued 2026-08-14**, jobs 6017303-6017326 (12 × 2 legs), resumes fleet #1's checkpoints |
+| `bench-2gpu` (T4 benchmark leg) | 200K env / 8K train | — | — | **done 2026-08-12**, job 5989959: 30 min, ~111 env-steps/s on the 2-GPU split |
 | `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**; unblocked, pending the bench leg + the T7 eps decision |
 
 The discount fix (0.997 → 0.999 + `completion_bonus` 200) is confirmed and is
@@ -84,9 +88,26 @@ death: `pb_c`=1.25 greedy burns all 2000 steps stuck at `final_x`=482.
    696,189, the nearest in-training eval was step 701,222 and hit the 2000-step
    cap without completing. 5K training steps apart, opposite outcomes.
 
-Jobs 5989667/5989669 scan that one greedy cell across every retained checkpoint
-to see whether greedy completion is a stable property or a knife-edge. A
-related knife-edge is already visible in T1: Level1-1 greedy is 1.00 at
+**The scans answered this (2026-08-12, jobs 5989667/5989669): it is a
+knife-edge.** Greedy completion is a property of individual checkpoints, not
+of the trained policy:
+
+- **Level1-1**: greedy completes at only **2 of 11** retained checkpoints
+  (`best.pt` and step_760000, both reaching `final_x`=3266). The other nine
+  stall at 1757-2978. "best.pt completes" (T1) is real but is a checkpoint
+  lottery — 5K train steps separate completion from a 2000-step timeout.
+- **Level1-2**: the inverse. Greedy completes at the **last three**
+  checkpoints (755K/760K/763004) but **fails off `best.pt`**, deadlocked at
+  `final_x`=482 for all 2000 steps. `best.pt` is selected on the *noisy*
+  self-play rolling rate, and here that picked a checkpoint strictly worse
+  greedily than the final one. **This is the T8 risk**: distillation teachers
+  chosen by `best.pt` can be exactly the deadlocked weights.
+- The 5989666 fill-in (Level1-1 `pb_c`=2.5 off `best.pt`, 20 eps/cell):
+  best cell **0.80 [0.58,0.92]** at eps=0.1/temp=0.1; the training-noise
+  setting eps=0.25/temp=0.25 is *worst* at 0.35. Mild noise beats both greedy
+  and full training noise at this `pb_c`.
+
+A related knife-edge was already visible in T1: Level1-1 greedy is 1.00 at
 `pb_c`=1.25 and 0.00 at `pb_c`=2.5.
 
 **What survives from the original diagnosis** (the reasoning below still holds,
@@ -376,11 +397,21 @@ Measured from `level1-2-diag-v1`: jobs 5727109 (24h, TIMEOUT) + 5727110
 
 ---
 
-## T6 — The specialist fleet (**submitted 2026-08-11**)
+## T6 — The specialist fleet (**fleet #2 queued 2026-08-14**)
 
 12 single-level runs, 15M env steps each, matching the diag-run budget so the
 results are comparable to `level1-1-diag-v1` (0.84) and `level1-2-diag-v1`
-(0.68). Jobs **5990729-5990752**, run dirs `outputs/runs/spec-<level>/`.
+(0.68). Run dirs `outputs/runs/spec-<level>/`.
+
+**Fleet #1** (jobs 5990729-5990752, launched 2026-08-11) ran 2h15 and was
+killed fleet-wide by the hard 101 GB home quota — 12 × 271 MB checkpoints
+every 16 min. Every leg-1 died at its next save boundary; every leg-2 was
+cancelled on the dependency. The ~40K-train-step checkpoints survived, and
+the 2h15 of production self-play did validate both new mechanisms (eps anneal,
+stochastic starts) and showed spec-level3-2 at 0.14 completion by step 42K —
+ahead of the diag pace. **Fleet #2** (jobs **6017303-6017326**, queued
+2026-08-14) resumes those checkpoints via the normal `latest.pt` path, with
+storage now on `/projects` and failed saves made non-fatal.
 
 The blocker is cleared: `submit_all_levels.sh` submitted *unchained*
 `submit_single_level.sh` jobs that set no `run_name` and so could not
@@ -522,6 +553,15 @@ time; dump to the cap, not beyond it.
 - The login node kills multi-threaded torch (`libgomp: Thread creation failed`).
   Anything beyond a trivial single-threaded script needs `salloc`/`sbatch`;
   `OMP_NUM_THREADS=1` is enough for quick import-level checks.
+- **`pytest tests/` (full suite) dies silently on the login node** at
+  `test_inference_server.py::test_initial_inference_matches_direct_net` —
+  test #38 of 110, exit 1, no traceback, and it dumps a multi-GB core file
+  into the repo. Reproducible on an unmodified tree; the same test **passes
+  standalone**, and the whole suite passed on 2026-08-11 — so it's a
+  login-node environment/ordering problem (probably the same thread-creation
+  class as the libgomp finding above), not a code regression. Run the full
+  suite inside an allocation; scoped files are fine on the login node.
+  (Found 2026-08-14; the 6.2 GB core it dumped was deleted.)
 
 ---
 
@@ -530,6 +570,31 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-14** — **T6 fleet #2 queued**: jobs **6017303-6017326** (12 × 2
+  legs via `submit_specialist.sh`, identical recipe), resuming fleet #1's
+  ~40K-step checkpoints through the normal `latest.pt` auto-resume path.
+- **2026-08-14** — **Quota postmortem + storage migration.** Fleet #1's death
+  diagnosed as the hard 101 GB home quota (all 12 legs died at their next
+  16-min save boundary; empty `.err`s because wandb buffered the console).
+  Fixes: `outputs/` (39 GB) moved to
+  `/projects/u6oz/atdandrews/MuZero_Mario/outputs` (200 TB Lustre, no quota)
+  with a symlink at the old path (rsync verified zero-diff before deleting
+  the home copy; home 82 → 42 GB, incl. a 6.2 GB core dump); checkpoint saves
+  now warn-and-continue on `OSError` and clean up partial `.tmp`s
+  (regression-tested); `training.checkpoint_keep` added (default 10);
+  `WANDB_CONSOLE=off` exported by all three submit scripts; `.gitignore`
+  `outputs/` → `outputs` (trailing slash doesn't match symlinks). Found in
+  passing: full `pytest tests/` dies silently mid-suite on the login node
+  (see incidental findings) — checkpoint tests 12/12, crashing test passes
+  standalone, pre-existing on a clean tree.
+- **2026-08-12** — **T6 fleet #1 died** ~2h15 in (see postmortem above). The
+  same morning the four diagnostics completed clean: **5989959**
+  (`bench-2gpu`: 200K env steps / 30 min ≈ 111 env-steps/s on the 2-GPU
+  split), **5989666** (Level1-1 `pb_c`=2.5 fill-in: best 0.80 @
+  eps=0.1/temp=0.1, training-noise cell worst), **5989667/5989669** (greedy
+  checkpoint scans: greedy completion is a per-checkpoint knife-edge; 1-1
+  completes at 2/11 ckpts, 1-2 at the last 3 but *not* `best.pt`, which
+  deadlocks at x=482 — the T8 teacher-selection risk).
 - **2026-08-11** — VGDL finished; its two stranded jobs (5843779 s3-sync,
   5843780 readme, both `afterok` behind the failed 5843608 and therefore
   unrunnable) cancelled. Queue is now MuZero-only.

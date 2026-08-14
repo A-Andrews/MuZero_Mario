@@ -73,6 +73,7 @@ def test_save_checkpoint_writes_and_does_not_launch_replay(tmp_path, monkeypatch
 
     lr = _bare_learner()
     lr.ckpt_dir = tmp_path
+    lr.checkpoint_keep = 10
     lr.training_step = 7
     lr.env_step = 123
     lr.cfg = {}
@@ -101,6 +102,7 @@ def test_save_checkpoint_replaces_existing_latest_symlink(tmp_path, monkeypatch)
 
     lr = _bare_learner()
     lr.ckpt_dir = tmp_path
+    lr.checkpoint_keep = 10
     lr.env_step = 0
     lr.cfg = {}
     lr.net = _Net()
@@ -115,6 +117,34 @@ def test_save_checkpoint_replaces_existing_latest_symlink(tmp_path, monkeypatch)
     latest = tmp_path / "latest.pt"
     assert latest.is_symlink()
     assert latest.resolve() == (tmp_path / "step_2.pt").resolve()
+
+
+def test_save_checkpoint_failure_warns_and_continues(tmp_path, monkeypatch, capsys):
+    """A full disk (EDQUOT/ENOSPC) must not kill the run — 2026-08-12 T6."""
+
+    def failing_save(*, path, **kw):
+        raise OSError(122, "Disk quota exceeded")
+
+    monkeypatch.setattr(muzero_mod, "save_checkpoint", failing_save)
+    monkeypatch.setattr(muzero_mod, "rotate_checkpoints", lambda *a, **k: None)
+
+    lr = _bare_learner()
+    lr.ckpt_dir = tmp_path
+    lr.checkpoint_keep = 10
+    lr.training_step = 7
+    lr.env_step = 123
+    lr.cfg = {}
+    lr.net = _Net()
+    lr.opt = _Opt()
+    lr.scheduler = None
+    lr._last_saved_step = -1
+
+    lr._save_checkpoint()  # must not raise
+
+    # Stale _last_saved_step means save_final_checkpoint will retry.
+    assert lr._last_saved_step == -1
+    assert not (tmp_path / "latest.pt").exists()
+    assert "checkpoint save failed" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

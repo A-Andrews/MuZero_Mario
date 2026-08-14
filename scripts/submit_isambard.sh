@@ -25,6 +25,10 @@ source "${SLURM_SUBMIT_DIR}/.venv/bin/activate"
 echo "Python: $(which python)"
 python -c "import torch; print('torch', torch.__version__, 'CUDA:', torch.cuda.is_available())"
 
+# Do NOT let wandb wrap the console: its wrap_raw redirect buffers stderr and
+# a crashing learner's traceback never reaches the .err file (the 2026-08-12
+# T6 fleet died 12x with empty logs because of this).
+export WANDB_CONSOLE=off
 export WANDB_DIR="${SLURM_SUBMIT_DIR}/wandb_runs"
 mkdir -p "${SLURM_SUBMIT_DIR}/logs" "${SLURM_SUBMIT_DIR}/wandb_runs"
 

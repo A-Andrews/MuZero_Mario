@@ -35,8 +35,18 @@ def save_checkpoint(
             "python": random.getstate(),
         },
     }
-    torch.save(payload, tmp)
-    os.replace(tmp, path)
+    try:
+        torch.save(payload, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        # A failed write (ENOSPC/EDQUOT, SIGTERM mid-save, ...) must not leave
+        # a partial .tmp behind — on a quota'd filesystem the stale tmps
+        # themselves eat the budget.
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def load_checkpoint(path, map_location="cpu") -> Dict[str, Any]:

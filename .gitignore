@@ -8,7 +8,7 @@ venv/
 /env/
 
 # Outputs
-outputs/
+outputs
 # Anchored: a bare `logs/` also matched src/logs/, which silently kept the
 # logging package out of git and lost it in the BMRC -> Isambard migration.
 /logs/
