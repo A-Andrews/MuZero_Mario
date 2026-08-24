@@ -93,6 +93,29 @@ def select_human_files(
     return files
 
 
+def split_human_files(
+    data_dir: Path,
+    *,
+    subjects: Optional[Sequence[str]] = None,
+    levels: Optional[Sequence[str]] = None,
+    holdout_fraction: float = 0.0,
+    seed: int = 0,
+) -> Tuple[List[Path], List[Path]]:
+    """Seeded file-level train/holdout split -> (train_files, holdout_files).
+
+    Factored out so the BC/action-agreement evaluators can reproduce *exactly*
+    the split `load_human_buffer` trained on and score only on held-out files.
+    The shuffle is over the filtered list, so callers must pass the **same**
+    ``levels``/``subjects``/``holdout_fraction``/``seed`` to get the same split —
+    filtering to one level afterwards is fine, re-splitting per level is not.
+    """
+    files = select_human_files(data_dir, subjects=subjects, levels=levels)
+    rng = np.random.default_rng(seed)
+    files = [files[i] for i in rng.permutation(len(files))]
+    n_holdout = int(round(len(files) * float(holdout_fraction)))
+    return files[n_holdout:], files[:n_holdout]
+
+
 def load_human_buffer(
     data_dir: str | Path,
     *,
@@ -117,19 +140,18 @@ def load_human_buffer(
     never also trained on.
     """
     t0 = time.time()
-    files = select_human_files(data_dir, subjects=subjects, levels=levels)
-    if not files:
+    train_files, holdout_files = split_human_files(
+        Path(data_dir),
+        subjects=subjects,
+        levels=levels,
+        holdout_fraction=holdout_fraction,
+        seed=seed,
+    )
+    if not train_files and not holdout_files:
         raise ValueError(
             f"no human trajectories left after filtering "
             f"(subjects={subjects}, levels={levels}) in {data_dir}"
         )
-
-    rng = np.random.default_rng(seed)
-    files = [files[i] for i in rng.permutation(len(files))]
-
-    n_holdout_files = int(round(len(files) * float(holdout_fraction)))
-    holdout_files = files[:n_holdout_files]
-    train_files = files[n_holdout_files:]
 
     pool = ThreadPoolExecutor(max_workers=max(1, num_threads))
     try:

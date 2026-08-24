@@ -264,6 +264,93 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
   the training start distribution.
 - `worker.torch_threads` / `learner_torch_threads` — kept at 1 to avoid oversubscription across the worker pool.
 
+### The human run-through benchmark (`images/` figure job)
+
+`sbatch scripts/submit_human_benchmark.sh` plays each level's **best** checkpoint
+through the level a few times and plots those run-throughs against the human
+ones, writing `images/human_vs_agent_runthrough.{pdf,json}` into the repo.
+`scripts/eval_human_benchmark.py` is the driver and runs standalone
+(`--device cpu --levels Level1-1 --rollouts 1` for a quick check).
+
+It answers a deliberately narrower question than the in-run `human_compare:`
+metrics: *can the model get through the level at all, in a human-like number of
+steps* — not a like-for-like rate comparison. Consequences of that framing:
+- **`best.pt`, not `latest.pt`.** `step_*.pt` rotates (keep=10) and several runs
+  end in a late collapse, so the final checkpoint understates what was learned.
+  Every figure row and JSON record carries the run name, checkpoint path and
+  training step, so which model produced a point is never ambiguous.
+- **The run is chosen by score, not by family.** Levels with both a T6
+  `spec-<level>` and a T7 `spec-imit-<level>` take whichever has the higher
+  recorded `best.json` rate, so the imitation rescues win 1-3 and 4-3 on merit
+  rather than by a hard-coded rule.
+- **Stochastic starts are ON** (read from the run's own `env.noop_max` /
+  `env.skip_to_control`), because the env is otherwise deterministic and N greedy
+  rollouts would be N copies of one trajectory. `--deterministic` gives the
+  single reproducible greedy trajectory instead, and correctly collapses to one
+  rollout.
+- The human side is the p10-p90 spread of **successful** human run-throughs with
+  a median tick; levels humans never played (2-2 in the training set) get no band
+  and are labelled as such.
+
+`images/` is git-tracked (see its README) — the PDF is vector and tens of KB, so
+committing it versions the figure alongside the code that made it. matplotlib is
+a dependency of this script only; the submit script points `MPLCONFIGDIR` at
+`outputs/` so no font cache is written to the quota-limited home.
+
+### Comparing each new model against the human (`human_compare:` config block)
+
+Every checkpoint replay is scored against a human playing the **same level**,
+using the converted corpus in `outputs/human_trajectories/`. On by default and
+**independent of `imitation.enabled`** — a pure self-play run gets the
+comparison too. Implementation: `src/muzero/human_baseline.py`, called from
+`MuzeroLearner._run_replay`, so it rides the replay cadence
+(`training.replay_every_train_steps`, default 50k — *not* every 5k checkpoint)
+because the performance half needs an actual agent rollout to compare.
+
+Metrics logged alongside the existing `replay/<level>_*` keys:
+- `human/<level>_{completion_rate,no_death_rate,length_median,length_p10,return_median}`
+  — flat reference lines. `completion_rate` is **per rep** (one human attempt,
+  comparable to a self-play episode); `no_death_rate` is the stricter
+  finished-on-the-first-life rate. Lengths/returns come from the completing
+  segment; `length_p10` is a "good human" rather than a median one.
+- `compare/<level>_{completed_vs_human,return_ratio,length_ratio,beats_human_median,beats_human_p10}`
+  — the performance comparison. `length_ratio` is only emitted when the agent
+  actually reached the flag (time-to-flag is meaningless otherwise); **lower is
+  better** there, unlike every other ratio.
+- `compare/<level>_{action_agreement,action_cross_entropy}` — the behavioural
+  half: the checkpoint's policy head scored against the human's *actual* button
+  press on held-out human states. This is the per-level, per-checkpoint sibling
+  of the corpus-wide `imitation/bc_accuracy`.
+
+Three things that are easy to get wrong here:
+- **Reward-scale rebasing.** The converter baked in its own
+  `COMPLETION_BONUS = 100` while the curriculum recipe runs
+  `env.completion_bonus=200`, so raw returns are not comparable as stored.
+  `HumanLevelStats.return_at_bonus()` re-bases them — sound because the bonus is
+  a single additive term on the completing step and the replay metric is an
+  *undiscounted* sum (so the converter's `DISCOUNT = 0.997` never enters).
+  If you change the converter's constants, update `CONVERTER_COMPLETION_BONUS`.
+- **Leakage.** When `imitation.enabled`, action-agreement is scored only on the
+  files `load_human_buffer` held out. The holdout is a seeded shuffle of the
+  *filtered* file list, so `split_human_files` (shared by both callers) must be
+  given the imitation loader's **exact** level/subject filters — filtering to
+  one level after the split is fine, re-splitting per level is not. That is why
+  `human_compare.subjects` is ignored (with a warning) when it disagrees with
+  `imitation.subjects`.
+- **The two sides are not measured the same way, and that is the point.** The
+  agent number is one greedy, deterministic-start rollout; the human numbers are
+  distributions over many attempts. Read `completed_vs_human` as "did this model
+  finish it" against "how often did a person", not as a like-for-like delta.
+
+Per-level stats are memoised to `outputs/human_trajectories/human_level_stats.json`
+(keyed by level + subject set; bump `_CACHE_VERSION` if the schema changes) — a
+full scan is ~0.2 s/level and reads only the small npz members, never `obs_stacks`.
+The action-eval obs *are* held in RAM: 36.9 KB/step, so the default
+`action_eval_transitions_per_level: 1024` is ~38 MB/level (~450 MB across 12
+levels); set it to 0 to keep only the performance comparison. Both are loaded
+lazily inside the background replay thread, so learner startup is untouched.
+Levels humans never played (w2l2, w7l2, the castle -4s) are simply skipped.
+
 ## Level-completion tracking
 
 The headline goal is finishing levels. Wandb metrics: `selfplay/completed/<level>` (0/1 per episode), `selfplay/completion_rate_100ep` (rolling, all levels pooled), `autocurriculum/completion_rate/<level>`, and `replay/<level>_completed` per replay checkpoint. `checkpoints/best.pt` (+`best.json` sidecar carrying the rate across chain legs) is refreshed on every new rolling-completion-rate high — `step_*.pt` files rotate (keep=10), so best.pt is the only checkpoint guaranteed to survive a late-run performance collapse. Note `replay/<level>_completed` evaluates *greedy* MCTS (temp 0, no Dirichlet) — it can sit at 0 while noisy self-play completes 30-70%; the gap means the policy still needs exploration noise to get past specific stuck-spots. The autocurriculum samples levels ∝ inverse-mean-episode-length × incompletion-rate, so mastered levels free up worker time for unfinished ones (`autocurriculum.min_weight` floor guards against forgetting).
@@ -284,6 +371,26 @@ omitting it leaves the return signature and the eval/benchmark call sites unchan
 
 Note: bare `pytest` collects `.venv/` and fails with ~113 collection errors —
 always scope it (`pytest tests/`).
+
+`pytest tests/` used to die silently part-way through on the login node (it
+looked like a hang around the inference-server tests). The cause was OpenMP
+thread exhaustion, not the tests: `export OMP_NUM_THREADS=1` (plus
+`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS`) runs the whole 125-test suite there in
+~9s. The same export is what lets `scripts/smoke_test.py`'s train job run on the
+login node — without it the learner dies at
+`libgomp: Thread creation failed: Resource temporarily unavailable`.
+
+**Replay videos cannot be written on the login node**, and `OMP_NUM_THREADS=1`
+does not help — ffmpeg spawns its own encoder threads and hits the same
+`ulimit -u` wall (1900 on Isambard, against ~6000 threads already live for the
+user). It surfaces as `pthread_create() failed: Resource temporarily
+unavailable` → `Could not open encoder before EOF` → a 0-byte mp4 and
+`[replay] <level> video failed`. This is login-node-only: all 754 mp4s from
+real compute-node runs are valid. Since only the *video* dies, `_run_replay`
+logs the replay scalars (and the human comparison) before touching the encoder
+and falls back to a plain `wandb.log` on encoder failure, flagging
+`replay/<level>_video_error` — a smoke run on the login node therefore still
+exercises and logs the full metric path.
 
 ## Reference
 

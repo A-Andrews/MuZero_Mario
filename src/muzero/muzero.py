@@ -27,6 +27,12 @@ from src.checkpoint import (
 from src.logs.video import save_video
 from src.muzero.buffer import TrajectoryBuffer
 from src.muzero.human_data import HumanEvalSet
+from src.muzero.human_baseline import (
+    HumanLevelStats,
+    compare_metrics,
+    compute_level_stats,
+    load_action_eval_sets,
+)
 from src.muzero.networks import MuZeroNet
 from src.muzero.transforms import cross_entropy_on_support, support_to_scalar
 from src.selfplay.autocurriculum import LevelSampler
@@ -218,6 +224,25 @@ class MuzeroLearner:
             except (ValueError, OSError):
                 pass
 
+        # Completion-gated root-Dirichlet anneal. The origin lives in a sidecar
+        # rather than in the checkpoint so enabling the gate doesn't invalidate
+        # existing checkpoints, and so a chained leg that resumes after the
+        # unlock doesn't re-arm the gate and jump eps back to its start value.
+        self._eps_gate_on_completion = bool(
+            (cfg.get("mcts", {}) or {}).get(
+                "root_exploration_eps_gate_on_completion", False
+            )
+        )
+        self._first_completion_step = -1
+        fc_meta = self.ckpt_dir / "first_completion.json"
+        if fc_meta.exists():
+            try:
+                self._first_completion_step = int(
+                    json.loads(fc_meta.read_text()).get("rl_train_step", -1)
+                )
+            except (ValueError, OSError):
+                pass
+
         # --- autocurriculum: inverse-length per-level sampling ---------------
         ac = cfg.get("autocurriculum", {}) or {}
         self._ac_enabled = bool(ac.get("enabled", False)) and len(cfg["env"]["levels"]) > 1
@@ -246,6 +271,14 @@ class MuzeroLearner:
         self._bc_eval_obs: Optional[torch.Tensor] = None
         self._bc_eval_actions: Optional[torch.Tensor] = None
 
+        # Human comparison at checkpoint-replay time. Loaded lazily inside the
+        # background replay thread (the action-eval obs are hundreds of MB and
+        # take seconds to decompress) so learner startup is untouched.
+        self._human_cmp_cfg = cfg.get("human_compare") or {}
+        self._human_stats: Optional[Dict[str, HumanLevelStats]] = None
+        self._human_action_eval: Dict[str, HumanEvalSet] = {}
+        self._human_cmp_tensors: Dict[str, Any] = {}
+
         # Prefetch is primed once on the first post-warmup step; every
         # _train_step then requests the next batch itself.
         self._prefetch_primed = False
@@ -255,12 +288,34 @@ class MuzeroLearner:
         self._replay_net: Optional[MuZeroNet] = None
         self._replay_thread: Optional[threading.Thread] = None
 
+        # Normally the coordinator is attached later via set_coordinator()
+        # (after any imitation pretrain); this covers a caller that passes one
+        # straight to the constructor, since the sidecar is read above.
+        self._push_anneal_origin()
+
     # -------------------------------------------------------------------------
 
     def set_coordinator(self, coordinator: SelfPlayCoordinator):
         """Attach the self-play coordinator (constructed after pretrain so
         workers start with the BC-pretrained weights)."""
         self.coord = coordinator
+        self._push_anneal_origin()
+
+    def _push_anneal_origin(self) -> None:
+        """Seed the workers' shared anneal origin from the resumed sidecar."""
+        if self.coord is None or self._first_completion_step < 0:
+            return
+        try:
+            self.coord.set_anneal_origin(self._first_completion_step)
+        except AttributeError:
+            # Loud on purpose: the failure mode is silent otherwise — the run
+            # would anneal exactly like an ungated one and only look wrong 15M
+            # env steps later, which is the mistake this gate exists to stop.
+            print(
+                "[train] WARNING: coordinator has no set_anneal_origin(); the "
+                "completion-gated eps anneal is NOT active for this run",
+                flush=True,
+            )
 
     def load(self, ckpt_path):
         state = load_checkpoint(ckpt_path, map_location=self.device)
@@ -353,6 +408,8 @@ class MuzeroLearner:
                     self._ac_episodes_seen[lv] += 1
                 self._recent_completions.append(1.0 if completed else 0.0)
                 completion_rate = float(np.mean(self._recent_completions))
+                if completed and self._first_completion_step < 0:
+                    self._record_first_completion(lv)
                 self.wandb.log(
                     {
                         f"selfplay/episode_return/{lv}": status["episode_return"],
@@ -762,6 +819,41 @@ class MuzeroLearner:
         )
         print(f"[train] wrote {sentinel}", flush=True)
 
+    def _record_first_completion(self, level: str) -> None:
+        """Unlock the completion-gated anneal on the run's first completion.
+
+        Recorded even when the gate is off — the sidecar is a cheap provenance
+        record of when a run escaped, and it means flipping the gate on for a
+        resumed leg starts from the right origin instead of re-arming.
+        """
+        rl_step = max(0, self.training_step - self._rl_offset)
+        self._first_completion_step = rl_step
+        self._push_anneal_origin()
+        try:
+            (self.ckpt_dir / "first_completion.json").write_text(
+                json.dumps(
+                    {
+                        "rl_train_step": rl_step,
+                        "training_step": self.training_step,
+                        "env_step": self.env_step,
+                        "level": level,
+                    }
+                )
+            )
+        except OSError as e:
+            # Same reasoning as _save_checkpoint: never kill a run over a
+            # sidecar write. The in-memory origin still holds for this leg.
+            print(
+                f"[train] WARNING: could not persist first_completion.json: {e}",
+                flush=True,
+            )
+        if self._eps_gate_on_completion:
+            print(
+                f"[train] first completion on {level} at RL train step "
+                f"{rl_step} — root-Dirichlet anneal unlocked",
+                flush=True,
+            )
+
     def _save_best_checkpoint(self, completion_rate: float):
         """Overwrite best.pt on a new rolling-completion-rate high.
 
@@ -895,6 +987,116 @@ class MuzeroLearner:
             net = net.to(memory_format=torch.channels_last)
         return net
 
+    # ------------------------------------------------------------------
+    # Human comparison (runs inside the background replay thread)
+    # ------------------------------------------------------------------
+    def _ensure_human_baseline(self, levels) -> None:
+        """One-shot load of the per-level human reference + action-eval sets."""
+        if self._human_stats is not None:
+            return
+        c = self._human_cmp_cfg
+        data_dir = c.get("data_dir", "outputs/human_trajectories")
+        subjects = list(c["subjects"]) if c.get("subjects") else None
+        try:
+            self._human_stats = compute_level_stats(
+                data_dir, levels, subjects=subjects,
+                use_cache=bool(c.get("cache_stats", True)),
+            )
+        except Exception as e:
+            print(f"[human-compare] level stats unavailable: {e}")
+            self._human_stats = {}
+            return
+
+        im = self.cfg.get("imitation") or {}
+        # When imitation trained on this corpus, score agreement only on the
+        # files it held out. The holdout is a seeded shuffle of the *filtered*
+        # file list, so reproducing it means mirroring the imitation loader's
+        # level and subject filters exactly — the replay level list and this
+        # block's own `subjects` would shuffle a different list and silently
+        # hand back files the net trained on.
+        holdout_only = self._imitation_enabled
+        split_levels = list(levels)
+        split_subjects = subjects
+        holdout_fraction = 0.0
+        if holdout_only:
+            lv = im.get("levels", "match_env")
+            if lv == "match_env":
+                split_levels = list(self.cfg["env"]["levels"])
+            elif lv in ("all", None):
+                split_levels = None
+            else:
+                split_levels = list(lv)
+            split_subjects = list(im["subjects"]) if im.get("subjects") else None
+            holdout_fraction = float(im.get("holdout_fraction", 0.0))
+            if subjects is not None and subjects != split_subjects:
+                print(
+                    f"[human-compare] ignoring human_compare.subjects={subjects}: with "
+                    f"imitation on, the action-eval split must mirror "
+                    f"imitation.subjects={split_subjects} to stay leak-free"
+                )
+        try:
+            self._human_action_eval = load_action_eval_sets(
+                data_dir,
+                levels,
+                subjects=split_subjects,
+                max_transitions_per_level=int(c.get("action_eval_transitions_per_level", 1024)),
+                holdout_only=holdout_only,
+                holdout_fraction=holdout_fraction,
+                split_levels=split_levels,
+                seed=int(self.cfg.get("seed", 0)),
+            )
+        except Exception as e:
+            print(f"[human-compare] action-eval unavailable: {e}")
+            self._human_action_eval = {}
+
+    def _human_action_agreement(self, level: str) -> Dict[str, float]:
+        """Top-1 agreement + cross-entropy of the *replay* net against the human's
+        actual button presses on that level's held-out states."""
+        eval_set = self._human_action_eval.get(level)
+        if eval_set is None or len(eval_set) == 0:
+            return {}
+        cached = self._human_cmp_tensors.get(level)
+        if cached is None:
+            cached = (
+                torch.from_numpy(eval_set.obs),
+                torch.from_numpy(eval_set.actions),
+            )
+            self._human_cmp_tensors[level] = cached
+        obs_all, act_all = cached
+
+        n = int(act_all.shape[0])
+        correct, ce_sum = 0, 0.0
+        with torch.no_grad():
+            for i in range(0, n, 256):
+                obs = obs_all[i:i + 256].to(self.device).float().div_(255.0)
+                if self.device.type == "cuda":
+                    obs = obs.contiguous(memory_format=torch.channels_last)
+                acts = act_all[i:i + 256].to(self.device)
+                _, policy_logits, _ = self._replay_net.initial_step(obs)
+                logp = F.log_softmax(policy_logits.float(), dim=-1)
+                ce_sum += float(-logp.gather(1, acts.unsqueeze(1)).sum().item())
+                correct += int((logp.argmax(dim=-1) == acts).sum().item())
+        return {
+            f"compare/{level}_action_agreement": correct / n,
+            f"compare/{level}_action_cross_entropy": ce_sum / n,
+        }
+
+    def _human_compare_metrics(
+        self, level: str, completed: bool, n_steps: int, total_return: float
+    ) -> Dict[str, float]:
+        """Performance comparison (pure math, see `human_baseline.compare_metrics`)
+        plus the behavioural action-agreement pass over held-out human states."""
+        m = compare_metrics(
+            level,
+            completed=completed,
+            n_steps=n_steps,
+            total_return=total_return,
+            stats=(self._human_stats or {}).get(level),
+            completion_bonus=float(self.cfg["env"].get("completion_bonus", 0.0)),
+        )
+        m.update(self._human_action_agreement(level))
+        return m
+
     def _run_replay(self, cpu_sd, video_step_dir):
         """Background replay: greedy MCTS rollouts on a private network copy.
 
@@ -922,8 +1124,11 @@ class MuzeroLearner:
             # One RGB frame per env.step(); env.step advances `frame_skip`
             # emulator frames at 60 Hz, so playback fps is 60 / frame_skip.
             video_fps = max(1, 60 // frame_skip)
+            if self._human_cmp_cfg.get("enabled", False):
+                self._ensure_human_baseline(list(env_cfg["levels"]))
             for level in env_cfg["levels"]:
                 try:
+                    rollout_info: Dict[str, Any] = {}
                     frames, total_return, n_steps, completed = run_replay_rollout(
                         level=level,
                         int_path=env_cfg["int_path"],
@@ -940,22 +1145,47 @@ class MuzeroLearner:
                         seed=int(self.cfg["seed"]) + 777,
                         bk2_path=video_step_dir / f"{level}.bk2",
                         leaf_batch=int(mcts_cfg.get("leaf_batch", 1)),
+                        info_out=rollout_info,
+                        # keeps replay/<level>_return on the same reward scale
+                        # as selfplay/episode_return/<level>
+                        completion_bonus=float(env_cfg.get("completion_bonus", 100.0)),
                     )
+                    metrics = {
+                        f"replay/{level}_return": total_return,
+                        f"replay/{level}_length": n_steps,
+                        f"replay/{level}_completed": 1.0 if completed else 0.0,
+                        f"replay/{level}_final_x": float(rollout_info.get("final_x", 0)),
+                        f"replay/{level}_timed_out": float(
+                            rollout_info.get("timed_out", False)
+                        ),
+                    }
+                    if self._human_cmp_cfg.get("enabled", False):
+                        metrics.update(
+                            self._human_compare_metrics(
+                                level, completed, n_steps, total_return
+                            )
+                        )
+                    # The mp4 is the *least* important product here, and its
+                    # encoder is the flakiest step (ffmpeg dies under CPU
+                    # contention, leaving a 0-byte file). Keep video failure
+                    # from taking the scalars — including the human comparison
+                    # — down with it. step is read live to keep wandb's step
+                    # monotonic; the training thread has advanced since the
+                    # weight snapshot.
                     mp4_path = video_step_dir / f"{level}.mp4"
-                    save_video(mp4_path, frames, fps=video_fps)
-                    # step read live to keep wandb's step monotonic; the
-                    # training thread has advanced since the snapshot.
-                    self.wandb.log_video(
-                        key=f"replay/{level}",
-                        path=mp4_path,
-                        fps=video_fps,
-                        step=self.training_step,
-                        extra={
-                            f"replay/{level}_return": total_return,
-                            f"replay/{level}_length": n_steps,
-                            f"replay/{level}_completed": 1.0 if completed else 0.0,
-                        },
-                    )
+                    try:
+                        save_video(mp4_path, frames, fps=video_fps)
+                        self.wandb.log_video(
+                            key=f"replay/{level}",
+                            path=mp4_path,
+                            fps=video_fps,
+                            step=self.training_step,
+                            extra=metrics,
+                        )
+                    except Exception as e:
+                        metrics[f"replay/{level}_video_error"] = 1.0
+                        self.wandb.log(metrics, step=self.training_step)
+                        print(f"[replay] {level} video failed (metrics kept): {e}")
                 except Exception as e:
                     self.wandb.log(
                         {f"replay/{level}_error": 1.0}, step=self.training_step

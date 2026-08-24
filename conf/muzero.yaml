@@ -165,6 +165,24 @@ imitation:
   # at the observed ~0.035 train/env ratio. null = constant mix_ratio.
   mix_ratio_schedule: null
 
+# Score every checkpoint replay against a human playing the *same* level, using
+# the converted CNeuroMod corpus (same dir as `imitation.data_dir`). Independent
+# of `imitation.enabled` — a pure self-play run still gets the comparison — but
+# when imitation IS on, action-agreement is measured only on the files the
+# imitation loader held out, so it never scores states the net trained on.
+# Emits `human/<level>_*` reference lines and `compare/<level>_*` ratios
+# alongside the existing `replay/<level>_*` metrics, on the replay cadence
+# (`training.replay_every_train_steps`) since it needs an agent rollout.
+human_compare:
+  enabled: true
+  data_dir: outputs/human_trajectories
+  subjects: null            # null = all subjects; or a list, e.g. [sub-01]
+  cache_stats: true         # memoise per-level stats to <data_dir>/human_level_stats.json
+  # Held-out human states scored for action agreement, per level. obs are
+  # 36.9 KB/step, so 1024 is ~38 MB/level (~450 MB across the 12-level set).
+  # 0 disables the behavioural half and keeps only the performance comparison.
+  action_eval_transitions_per_level: 1024
+
 selfplay:
   num_workers: 20
   max_queue_size: 32

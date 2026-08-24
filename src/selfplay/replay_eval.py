@@ -40,6 +40,7 @@ def run_replay_rollout(
     info_out: Optional[dict] = None,
     noop_max: int = 0,
     skip_to_control: bool = False,
+    completion_bonus: float = 100.0,
 ) -> Tuple[List[np.ndarray], float, int, bool]:
     """Return (raw_rgb_frames, total_return, num_env_steps, level_completed).
 
@@ -57,6 +58,13 @@ def run_replay_rollout(
 
     `np_seed` seeds numpy so a noisy rollout is reproducible; `info_out`, if
     given, is filled with extra per-rollout diagnostics (`final_x`, `timed_out`).
+
+    `completion_bonus` must be passed the run's `env.completion_bonus` for the
+    returned total to be on the same reward scale as `selfplay/episode_return`;
+    it defaults to the env's own 100.0 default, which is what every call site
+    used before — so runs training at a different bonus (the curriculum recipe
+    uses 200) had `replay/<level>_return` silently 10 units short on a
+    completing rollout.
 
     `noop_max`/`skip_to_control` are the env's stochastic-start knobs and
     default to **off** here even when training has them on, so a greedy eval
@@ -76,6 +84,7 @@ def run_replay_rollout(
         seed=seed,
         noop_max=noop_max,
         skip_to_control=skip_to_control,
+        completion_bonus=completion_bonus,
     )
     recording = False
     rec_env = None
