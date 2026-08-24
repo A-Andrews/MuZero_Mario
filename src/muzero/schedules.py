@@ -44,3 +44,17 @@ def value_at(step: int, points: Schedule) -> float:
         if step < s1:
             return v0 + (v1 - v0) * (step - s0) / (s1 - s0)
     return points[-1][1]
+
+
+def value_at_gated(step: int, points: Schedule, origin: Optional[int]) -> float:
+    """`value_at` with the schedule's clock started at `origin`.
+
+    ``origin=None`` means the gate has not opened yet, and pins the value to the
+    first knot however far `step` has advanced. Used by the completion-gated
+    root-Dirichlet anneal (`mcts.root_exploration_eps_gate_on_completion`): a
+    run that has never completed a level keeps its full exploration budget
+    rather than annealing into a local optimum it can no longer escape.
+    """
+    if origin is None:
+        return points[0][1]
+    return value_at(step - origin, points)

@@ -35,6 +35,12 @@ class SelfPlayCoordinator:
         self.traj_queue = self.ctx.Queue(maxsize=int(cfg["selfplay"]["max_queue_size"]))
         self.status_queue = self.ctx.Queue()
         self.train_step = self.ctx.Value("i", 0)
+        # Origin for the root-Dirichlet anneal when
+        # mcts.root_exploration_eps_gate_on_completion is on: the RL-phase
+        # train step at which this run first completed a level. -1 = not yet,
+        # which holds eps at the schedule's first knot. Set by the learner via
+        # set_anneal_origin(); read by workers every step.
+        self.anneal_origin = self.ctx.Value("i", -1)
         self._processes = []
 
         # Shared sampling weights per level (uniform until the learner pushes
@@ -105,6 +111,7 @@ class SelfPlayCoordinator:
                     self.traj_queue,
                     self.status_queue,
                     self.train_step,
+                    self.anneal_origin,
                 ),
                 daemon=True,
             )
@@ -146,6 +153,13 @@ class SelfPlayCoordinator:
 
     def set_train_step(self, step: int):
         self.train_step.value = int(step)
+
+    def set_anneal_origin(self, step: int) -> None:
+        """Record the RL-phase train step of the run's first completion."""
+        self.anneal_origin.value = int(step)
+
+    def get_anneal_origin(self) -> int:
+        return int(self.anneal_origin.value)
 
     def drain_trajectories(self, max_items: int = 64):
         out = []

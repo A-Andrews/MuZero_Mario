@@ -112,6 +112,23 @@ mcts:
   # Sized per run like selfplay.temperature_schedule — see submit_specialist.sh
   # (single level) and submit_curriculum.sh (12 levels) for the concrete grids.
   root_exploration_eps_schedule: null
+  # Gate the anneal on the run's first level completion (2026-08-18). false =
+  # the schedule's step axis is the RL train step, which is what T6 did. true =
+  # the axis becomes (train_step - first_completion_step): eps holds at the
+  # schedule's *first* knot value until the run completes a level even once,
+  # and only then starts decaying.
+  # Why: on Level1-3/Level4-3 the T6 specialists never completed the level in
+  # ~100k episodes. Both plateau at a pit gap, so mcts_root_q_mean stays flat
+  # (~27 and ~20, vs 125 on a healthy run) — walking to the gap edge is a real
+  # local optimum and the value head correctly certifies it. Escaping needs one
+  # lucky deep excursion, and the deepest each run ever managed came in its
+  # first decile while eps was still 0.25; per-decile max final_x then *fell*
+  # as the anneal ran. Level3-3 (same level archetype) escaped at 29% in and
+  # went 0.1% -> 28% completion within one decile. Annealing exploration away
+  # from a policy that has never once seen the reward closes the only door out.
+  # The origin is persisted to checkpoints/first_completion.json so it survives
+  # chained legs; deleting that file re-arms the gate.
+  root_exploration_eps_gate_on_completion: false
 
 buffer:
   capacity_transitions: 300_000

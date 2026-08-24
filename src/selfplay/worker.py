@@ -27,7 +27,7 @@ from src.env.env import create_train_env
 from src.muzero.buffer import Trajectory
 from src.muzero.mcts import MCTS
 from src.muzero.returns import compute_n_step_returns
-from src.muzero.schedules import validate_schedule, value_at
+from src.muzero.schedules import validate_schedule, value_at, value_at_gated
 from src.muzero.temperature import temperature_for_step
 from src.selfplay.inference_server import RemoteNetwork
 
@@ -64,6 +64,7 @@ def selfplay_worker(
     traj_queue,              # send completed Trajectory
     status_queue,            # send episode-level scalar logs (dict)
     train_step_val,          # shared int (Value) controlled by learner
+    anneal_origin_val=None,  # shared int (Value): RL step of first completion, -1 = none
 ):
     """Entrypoint for a self-play child process.
 
@@ -123,6 +124,13 @@ def selfplay_worker(
     eps_schedule = validate_schedule(
         cfg["mcts"].get("root_exploration_eps_schedule"), lo=0.0, hi=1.0
     )
+    # Completion-gated anneal (2026-08-18). When on, the schedule's step axis
+    # is measured from the run's first completion rather than from step 0, so a
+    # run that has never seen the reward keeps its full exploration budget
+    # instead of annealing into a local optimum it can no longer escape.
+    eps_gate_on_completion = bool(
+        cfg["mcts"].get("root_exploration_eps_gate_on_completion", False)
+    )
 
     obs = env.reset()
     ep_obs, ep_actions, ep_rewards, ep_policies, ep_root_q = [], [], [], [], []
@@ -138,7 +146,20 @@ def selfplay_worker(
         if eps_schedule is not None:
             # MCTS reads this attribute at run() time, so mutating it here is
             # what makes the anneal take effect on the next search.
-            mcts.root_exploration_eps = value_at(step, eps_schedule)
+            if eps_gate_on_completion:
+                origin = (
+                    int(anneal_origin_val.value)
+                    if anneal_origin_val is not None
+                    else -1
+                )
+                # origin < 0 = the run has not completed a level yet, which
+                # pins eps at the schedule's first knot.
+                eps = value_at_gated(
+                    step, eps_schedule, None if origin < 0 else origin
+                )
+            else:
+                eps = value_at(step, eps_schedule)
+            mcts.root_exploration_eps = eps
 
         search_stats = {}
         action, pi_prob, root_q = mcts.run(

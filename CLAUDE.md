@@ -157,8 +157,12 @@ diagnosis this was built to settle.
 split is requested). `submit_curriculum.sh [run] [N] [overrides]` wraps it
 with the full validated 12-level recipe (2-GPU split, discount 0.999, bonus
 200, rescaled LR/temperature schedules, 1M buffer) — see the script header
-for the reasoning behind each knob. Three
-mechanisms keep the chain sane:
+for the reasoning behind each knob. `submit_specialist.sh <LEVEL> [N]` is the
+single-level (T6) sibling, and `submit_specialist_imitation.sh <LEVEL> [N]` is
+the human-demo rescue variant for levels self-play never completes — same
+recipe plus `imitation.enabled` and the completion-gated eps anneal, on a
+fresh `spec-imit-<level>` run name (imitation must only ever be enabled on a
+fresh run_name). Three mechanisms keep the chain sane:
 - A final checkpoint is saved when the env-step budget is reached **and** on
   SIGTERM/wall-time (`save_final_checkpoint`), so no training between `save_every`
   boundaries is lost and resumed legs never re-log wandb steps (the old cause of
@@ -225,6 +229,23 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
   survivable for a specialist you always evaluate with noise on, fatal for T8,
   where those checkpoints become distillation teachers. The effective value is
   logged as `selfplay/root_exploration_eps`; read completion rate against it.
+- `mcts.root_exploration_eps_gate_on_completion` — **gates that anneal on the
+  run's first completion** (default false = the T6 behaviour). When true the
+  schedule's step axis becomes `train_step - first_completion_step`: eps holds
+  at the schedule's first knot until self-play completes a level even once,
+  then anneals at the configured rate. The origin is persisted to
+  `checkpoints/first_completion.json` (a sidecar, not the checkpoint, so
+  enabling the gate doesn't invalidate existing checkpoints) and reloaded on
+  resume, so a chained leg never re-arms the gate; delete that file to re-arm.
+  The sidecar is written whether or not the gate is on, as provenance for when
+  a run escaped. Why it exists: the T6 Level1-3/Level4-3 specialists ran ~97k
+  and ~107k episodes with **zero** completions, both pinned at a pit gap
+  (Level1-3: 73% of episodes end x=750-999 by death, not timeout), with
+  `mcts_root_q_mean` flat all run (27.4 → 27.3) where Level3-2 tripled it
+  (39.8 → 125.3). A pit gap is a discontinuous reward cliff, so "walk to the
+  edge and stop" is a real local optimum the value head correctly certifies;
+  escape needs one lucky deep excursion, and annealing exploration away from a
+  policy that has never seen the reward closes that door permanently.
 - `env.noop_max` / `env.skip_to_control` — **stochastic starts**. NES Mario is
   otherwise fully deterministic, which made every greedy rollout a single
   trajectory rather than a sample (the T1 sweep's eval cells were all n=1 and
