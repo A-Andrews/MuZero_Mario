@@ -1,41 +1,62 @@
 # MuZero-Mario backlog
 
-**Status (2026-08-14): T6 fleet #1 was killed by the home storage quota ~2h15
-in; storage is migrated to `/projects`, the failure modes are patched, and
-fleet #2 is queued (jobs 6017303-6017326) resuming from the surviving
-checkpoints. All four diagnostic jobs (T1 follow-ups + bench-2gpu) completed
-and are read — results folded in below.**
+**Status (2026-08-24): T6 fleet #2 is done (all 12 specialists at 15M env
+steps), the two dead levels were rescued with human demos, per-checkpoint
+human comparison is in, and T7 is launched. T8 is unblocked and its dumper is
+written. The headline caveat: the fleet's completion rates lean heavily on
+exploration noise — 7 of 12 specialists cannot complete their own level
+greedily.**
 
-- **T6 fleet #1 died 2026-08-12** — all 12 leg-1 jobs (5990729-5990751, odd)
-  exited 1 simultaneously at their next checkpoint-save boundary: 12 × 271 MB
-  every 16 min blew the **hard 101 GB home quota** (no soft limit, no grace).
-  The `.err` files were empty because wandb's console redirect buffered the
-  tracebacks. ~40K train steps / ~600-860K env steps per run survived on disk.
-- **Fixed 2026-08-14**: `outputs/` is now a symlink to
-  `/projects/u6oz/atdandrews/MuZero_Mario/outputs` (200 TB Lustre, no quota);
-  failed checkpoint saves warn-and-continue instead of killing the run (and
-  clean up their `.tmp`); `training.checkpoint_keep` makes rotation
-  configurable; submit scripts export `WANDB_CONSOLE=off` so the next crash
-  lands in the `.err`. Home is back to 42 GB of 101 GB.
-- **The greedy checkpoint scans landed the verdict** (see "The open problem"):
-  greedy completion is a **knife-edge property of individual checkpoints**,
-  not of the trained policy — and on Level1-2 `best.pt` is greedily *worse*
-  than the final checkpoint. `best.pt` selection is the weak link for T8.
-- **`bench-2gpu` is clean**: 200K env steps in 30 min (~111 env-steps/s) on
-  the 2-GPU split. T7 is unblocked on this axis.
+- **T6 fleet #2 finished 2026-08-16** — jobs 6017303-6017326, all reached
+  `TRAINING_COMPLETE`. Final rates at eps=0.05: 3-2 0.89, 3-3 0.87, 1-1 0.72,
+  3-1 0.40, 4-1 0.37, 1-2 0.33, 2-3 0.32, 2-1 0.31, 2-2 0.24, 4-2 0.08,
+  and 1-3 / 4-3 at **0.00**.
+- **The two dead levels were rescued with human demos (2026-08-20)**, runs
+  `spec-imit-level1-3` / `spec-imit-level4-3` via
+  `submit_specialist_imitation.sh` (imitation + completion-gated eps anneal).
+  **Level1-3 escaped outright**: first completion at RL step 249k against
+  *never* in ~97k T6 episodes, best rolling rate **0.85**, root Q 27.4 -> 81.4,
+  and greedy replay completes at the annealed eps floor. **Level4-3 only
+  cracked open**: first completion at 79% of budget, best rate 0.01, ended
+  0.00. The mechanism works where the demos beat the wall in time.
+- **Human comparison is now automatic** (`human_compare:`, commit ab0ceab).
+  Every checkpoint replay is scored against a human on the same level. Two
+  scale bugs were found and fixed doing it: the comparator must be the human
+  **first-life** rate (agent episodes are `done_on_life_loss`, so the per-rep
+  rate overstates humans by 8-16 points), and `run_replay_rollout` never
+  passed the run's `completion_bonus`, so `replay/<level>_return` was on a
+  different scale from `selfplay/episode_return` in **every run to date**.
+- **The run-through benchmark (job 6083435) is the important new result.**
+  `images/human_vs_agent_runthrough.pdf`: each level's `best.pt` played through
+  its level 5x with stochastic starts. **5 of 12 levels finish at all; every
+  level that finishes beats the human median time** (3-3 at 391 steps vs 830
+  even beats the human p10). But 7 of 12 never finish — including 1-1, which
+  scores 0.72-0.91 in noisy self-play yet stalls at exactly x=2370 from five
+  different starts. Level3-1 completed its *deterministic* training replay in
+  811 steps and scores 0/5 here, so it is start-fragile, not merely
+  noise-dependent.
+- **T7 launched 2026-08-24** — `curriculum-nohuman` (jobs 6115540-6115543) and
+  `curriculum-human` (6115544-6115548), 4 chained legs each. The open question
+  from the previous status ("do T7's arms get the eps anneal?") is **decided:
+  yes**, `[[0,0.25],[3000000,0.05]]`, bottoming out where the curriculum's
+  temperature schedule does. Without it we would produce another set of
+  checkpoints whose headline rate does not survive greedy eval — exactly what
+  the benchmark just measured. The completion gate is left **off**: it keys on
+  the run's first completion of *any* level, which an easy level unlocks almost
+  immediately in a 12-level run.
 
 Next actions, in order:
-0. **Sanity-check the first fleet-#2 specialist that starts**: it must resume
-   from `latest.pt` (~step 40K) rather than start fresh, and
-   `selfplay/root_exploration_eps` should continue its 0.25 → 0.05 decay.
-   Fleet #1 already validated the fresh-start path (eps anneal + stochastic
-   starts ran 2h15 in production without incident; spec-level3-2 hit 0.14
-   completion by step 42K, ahead of the diag pace).
-1. **Decide whether T7's arms get the eps anneal** before launching them;
-   `submit_curriculum.sh` is still on constant eps=0.25 by decision (T2.1).
-2. **Rethink `best.pt` selection before T8** — the scans show the
-   noisy-self-play rolling rate can pick a checkpoint that deadlocks greedily
-   (Level1-2) while a later one completes.
+1. **Read T7's first leg** — confirm the human arm's ~56 GB corpus load fits
+   (220 G/job) and that `imitation/bc_accuracy` + `train/human_frac` move as
+   expected; confirm Level2-2 (zero human data) does not break the loader.
+2. **Run the T8 dumper** once T7 is stable enough to share the queue:
+   `scripts/dump_specialist_trajectories.py`. Two corrections to the plan
+   below are already applied — see T8.
+3. **Decide the T8 teacher-quality bar.** The dumper filters to completing
+   episodes, so a level whose specialist rarely completes even *with* noise
+   (4-3 at 0.01, 4-2 at 0.14) will be thin or empty in the corpus; the script
+   reports which levels came up short. Those levels may need the imitation
+   rescue treatment before they can teach.
 
 ---
 
@@ -488,18 +509,38 @@ visits, so compounding error is uncorrected — if the student plateaus well
 below its teachers, that is the first thing to suspect, and the escalation is
 the online-KL variant.
 
-**Step 1 — the dumper (new: `scripts/dump_specialist_trajectories.py`).**
-Load each specialist checkpoint, roll out its own level, emit `Trajectory` .npz
-in the *same format and naming convention* as `convert_human_bk2.py`. Two
-details make this free:
-- `human_data.py` filters on filename only — subject by `<subject>_` prefix,
-  level by a `level-wXlY` tag. Name the files
-  `spec-w1l1_ses-000_task-mario_level-w1l1_rep-000_seg0.npz` and both filters
-  work with **zero loader changes**; the specialist even shows up as its own
-  selectable "subject".
-- Store the **raw MCTS visit distribution** in `policies`, not a one-hot. This
-  is strictly richer supervision than the human corpus (whose one-hot is what
-  makes its policy loss pure BC) and the loader does not care.
+**Step 1 — the dumper (`scripts/dump_specialist_trajectories.py`, WRITTEN
+2026-08-24).** Loads each specialist checkpoint, rolls out its own level, and
+emits `Trajectory` .npz in the same format as `convert_human_bk2.py`.
+Round-trip verified end to end against the untouched loader (real Level3-3
+episodes: glob, level filter, subject filter, `load_human_buffer`, and a
+sampled training batch). **Two corrections to the plan as originally written:**
+
+- **Filenames must start with `sub-`.** `select_human_files` globs
+  `sub-*.npz`, so the `spec-w1l1_...` naming proposed here would have been
+  silently invisible — no error, an empty corpus. Files are written as
+  `sub-spec-w1l1_ses-000_task-mario_level-w1l1_rep-000_seg0.npz`, which keeps
+  the zero-loader-change property and still makes the teacher its own
+  selectable subject (`sub-spec-w1l1`). Guarded by
+  `tests/test_specialist_dump.py`.
+- **Rollouts need exploration noise.** The benchmark run showed 7 of 12
+  specialists cannot complete their own level greedily from `best.pt`, so a
+  greedy dumper would give those levels a corpus with zero successful
+  demonstrations. Rollouts default to `--eps 0.25` / `--temperature 0.25` and
+  keep only completing episodes; the script reports levels that fell short of
+  the target so a thin teacher cannot pass unnoticed.
+
+This also resolves the standing "rethink `best.pt` selection before T8" item,
+but not the way it was framed: `best.pt` is picked on the *noisy* rolling rate,
+which is a poor predictor of greedy competence — yet for **corpus generation**
+under noise it is exactly the right selection criterion. The concern applies to
+deploying a specialist, not to using it as a teacher.
+
+Store the **raw MCTS visit distribution** in `policies`, not a one-hot (done —
+verified 0/404 one-hot rows on real dumps, mean max-share 0.26), so the policy
+loss gets genuine distillation targets rather than behavioural cloning.
+`root_values` are real MCTS root Q, so returns and priorities are built exactly
+as `src/selfplay/worker.py` does.
 
 **Step 2 — the student.**
 
