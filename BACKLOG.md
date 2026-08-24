@@ -508,11 +508,17 @@ train steps and the 50K pretrain offset is applied automatically.
 `env.levels`). The autocurriculum will keep sampling Level2-2 and the human
 buffer contributes nothing there, so any T7 win must be checked per level
 before it is attributed to the human teacher. `levels: match_env` filters by
-filename tag and will simply find no w2l2 files — **still unconfirmed at
-launch**: check on arm B's first leg that the loader tolerates a requested
-level with zero matches rather than raising. Also confirm there that the
-~56 GB corpus load fits the 220 G/job (110 G x 2 GPUs) alongside the 1M-
-transition buffer.
+filename tag and will simply find no w2l2 files. **Confirmed safe 2026-08-24**:
+`select_human_files` filters on "matches any requested tag", so the 12-level
+request returns 3,926 files across the other 11 levels and never raises;
+Level2-2 contributes 0. `human_compare`'s per-level path skips levels with no
+human data (tested). Still to confirm on arm B's first leg: that the ~54 GB
+corpus load fits the 220 G/job (110 G x 2 GPUs) alongside the 1M-transition
+buffer.
+
+**Level2-2 is the natural control for this arm.** It is the one level where the
+human teacher contributes nothing, so if arm B beats arm A *there* too, the win
+is not coming from the demos.
 
 ## T8 — Distillation into one all-level model (**unblocked; dumper written 2026-08-24**)
 
