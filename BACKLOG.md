@@ -71,9 +71,14 @@ Next actions, in order:
 | T1 fill-in (1-1, `pb_c`=2.5) | — | — | — | **done 2026-08-12**, job 5989666: best cell 0.80 @ eps=0.1/temp=0.1 |
 | Greedy checkpoint scans | — | — | — | **done 2026-08-12**, jobs 5989667 (1-1: greedy completes at 2/11 ckpts) / 5989669 (1-2: last 3 ckpts complete, `best.pt` deadlocks) |
 | T6 fleet #1 (12 levels) | ~40K train / 600-860K env each | 0.14 (3-2), 0.02 (1-1), 0.01 (2-2), 0 others | — | **killed 2026-08-12 by home quota**, jobs 5990729-5990752; checkpoints survive |
-| T6 fleet #2 (12 levels) | — | — | — | **queued 2026-08-14**, jobs 6017303-6017326 (12 × 2 legs), resumes fleet #1's checkpoints |
+| T6 fleet #2 (12 levels) | 15M env each | 3-2 0.89, 3-3 0.87, 1-1 0.72, 3-1 0.40, 4-1 0.37, 1-2 0.33, 2-3 0.32, 2-1 0.31, 2-2 0.24, 4-2 0.08, **1-3 / 4-3 0.00** | 5/12 finish off `best.pt` (job 6083435) | **done 2026-08-16**, jobs 6017303-6017326 |
+| `spec-imit-level1-3` | 15M env / 815K train | **0.85** @ step 553K | **completes** at the annealed eps floor | **done 2026-08-20**, job 6047664: rescued from 0.00 |
+| `spec-imit-level4-3` | 15M env / 814K train | 0.01 @ step 660K | 0/5 | **done 2026-08-20**, job 6047668: cracked open, not solved |
+| Run-through benchmark | — | — | — | **done 2026-08-24**, job 6083435 → `images/human_vs_agent_runthrough.pdf` |
 | `bench-2gpu` (T4 benchmark leg) | 200K env / 8K train | — | — | **done 2026-08-12**, job 5989959: 30 min, ~111 env-steps/s on the 2-GPU split |
-| `curriculum-v1` (12 levels, 60M) | — | — | — | **never submitted**; unblocked, pending the bench leg + the T7 eps decision |
+| `curriculum-v1` (12 levels, 60M) | — | — | — | **superseded** — launched as T7's two named arms instead |
+| `curriculum-nohuman` (T7 arm A) | — | — | — | **launched 2026-08-24**, jobs 6115540-6115543 (4 legs) |
+| `curriculum-human` (T7 arm B) | — | — | — | **launched 2026-08-24**, jobs 6115544-6115548 (4 legs), BC pretrain 50K + mix anneal |
 
 The discount fix (0.997 → 0.999 + `completion_bonus` 200) is confirmed and is
 what unlocked completions at all; every pre-fix run was ≤4%.
@@ -242,7 +247,7 @@ one mp4 per cell to `outputs/eval_sweep/<level>_<run>_<jobid>/`.
   or lucky episodes). Re-examine how `completion_rate_100ep` is pooled before
   anything else.
 
-## T2 — Training changes (blocked on T1)
+## T2 — Training changes (**T2.1 + T2.3 done; shipped in T6/T7**)
 
 Ranked. All are config/schedule-level except the third.
 
@@ -257,11 +262,13 @@ Ranked. All are config/schedule-level except the third.
    `submit_specialist.sh` ships `[[0,0.25],[500000,0.05]]`, bottoming out where
    its temperature schedule does.
 
-   **`submit_curriculum.sh` was deliberately left unchanged**, so T7 still runs
-   constant eps=0.25 unless the schedule is passed explicitly:
-   `'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'` is the grid
-   matching its temperature schedule. Decide this before launching T7 — it is
-   the one knob that differs between the arms otherwise.
+   **Resolved 2026-08-24**: `submit_curriculum.sh` is still unchanged (constant
+   eps by default), but both T7 arms were launched with
+   `'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'` passed
+   explicitly — the grid matching its temperature schedule. The deciding
+   evidence was the run-through benchmark: without the anneal T7 would produce
+   another set of checkpoints whose headline rate does not survive greedy eval,
+   which is exactly what 7 of 12 T6 specialists turned out to be.
 2. **Raise self-play `mcts.num_simulations`** 50 → 100+. Sharper visit
    distributions are the direct fix for a policy head sitting near uniform —
    the training *target* is currently too diffuse. Costs throughput; the
@@ -293,7 +300,7 @@ Ranked. All are config/schedule-level except the third.
    reproducible and comparable to the 0.84/0.68 baselines — evaluate the new
    runs both ways.
 
-## T3 — Capacity / horizon (only if T2 doesn't close the gap)
+## T3 — Capacity / horizon (**not needed so far** — T2 closed enough of the gap that T6/T7 ran on the existing net)
 
 - `muzero.unroll_K` 5 → 10. At `frame_skip=4` the learned model currently sees
   20 frames of lookahead — thin for the frame-precise enemy avoidance that the
@@ -306,15 +313,16 @@ Ranked. All are config/schedule-level except the third.
   for the exact behavior wanted, though the 153K human steps still help
   representation learning.
 
-## T4 — The curriculum run (unblocked; benchmark leg queued)
+## T4 — The curriculum run (**done** — benchmark leg passed 2026-08-12, the real run launched as T7 on 2026-08-24)
 
-`scripts/submit_curriculum.sh` was written 2026-07-20 and committed in `ed4808d`
-but **still never submitted**. 12 levels, 60M env steps, 4 chained 24h legs,
-2 GPUs, 64 workers, 1M buffer.
+`scripts/submit_curriculum.sh` was written 2026-07-20 and committed in `ed4808d`,
+and was finally submitted 2026-08-24 — not as `curriculum-v1` but as T7's two
+named arms, since the T7 comparison is the reason the run exists. 12 levels,
+60M env steps, 4 chained 24h legs, 2 GPUs, 64 workers, 1M buffer.
 
-The benchmark leg is queued as job **5989959** — the 2-GPU split and the
-64-worker throughput have never run in production, and T7 commits ~384 GPU-h
-to them. It also now exercises the T2.3 env, since SLURM reads the working
+The benchmark leg **passed** as job **5989959** (2026-08-12): 200K env steps
+in 30 min, ~111 env-steps/s on the 2-GPU split, which is what cleared T7's
+~384 GPU-h commitment. It also now exercises the T2.3 env, since SLURM reads the working
 tree at run time:
 
 ```bash
@@ -418,7 +426,7 @@ Measured from `level1-2-diag-v1`: jobs 5727109 (24h, TIMEOUT) + 5727110
 
 ---
 
-## T6 — The specialist fleet (**fleet #2 queued 2026-08-14**)
+## T6 — The specialist fleet (**done 2026-08-16**; 1-3/4-3 rescued 2026-08-20)
 
 12 single-level runs, 15M env steps each, matching the diag-run budget so the
 results are comparable to `level1-1-diag-v1` (0.84) and `level1-2-diag-v1`
@@ -430,9 +438,12 @@ every 16 min. Every leg-1 died at its next save boundary; every leg-2 was
 cancelled on the dependency. The ~40K-train-step checkpoints survived, and
 the 2h15 of production self-play did validate both new mechanisms (eps anneal,
 stochastic starts) and showed spec-level3-2 at 0.14 completion by step 42K —
-ahead of the diag pace. **Fleet #2** (jobs **6017303-6017326**, queued
-2026-08-14) resumes those checkpoints via the normal `latest.pt` path, with
-storage now on `/projects` and failed saves made non-fatal.
+ahead of the diag pace. **Fleet #2** (jobs **6017303-6017326**, launched
+2026-08-14) resumed those checkpoints via the normal `latest.pt` path, with
+storage now on `/projects` and failed saves made non-fatal, and **finished
+2026-08-16** — all 12 reached `TRAINING_COMPLETE` at 15M env steps with no
+quota deaths. Per-level rates are in the table at the top; 1-3 and 4-3 came
+out at 0.00 and were handled separately (see the imitation rescue below).
 
 The blocker is cleared: `submit_all_levels.sh` submitted *unchained*
 `submit_single_level.sh` jobs that set no `run_name` and so could not
@@ -461,27 +472,35 @@ Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
 policy dies at x=850, and 4-x are unattempted.
 
-## T7 — Autocurriculum ± human teacher (blocked on T1/T2)
+## T7 — Autocurriculum ± human teacher (**launched 2026-08-24**)
 
 Two runs off `submit_curriculum.sh`, identical except for the `imitation:`
 block:
 
+Launched 2026-08-24 as jobs **6115540-6115543** (arm A) and **6115544-6115548**
+(arm B), exactly these commands:
+
 ```bash
-bash scripts/submit_curriculum.sh curriculum-nohuman 4
+bash scripts/submit_curriculum.sh curriculum-nohuman 4 \
+    'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'
 bash scripts/submit_curriculum.sh curriculum-human 4 \
     imitation.enabled=true \
     imitation.pretrain_steps=50_000 \
-    'imitation.mix_ratio_schedule=[[0,0.25],[700_000,0.0]]'
+    'imitation.mix_ratio_schedule=[[0,0.25],[700_000,0.0]]' \
+    'mcts.root_exploration_eps_schedule=[[0,0.25],[3000000,0.05]]'
 ```
+
+The eps anneal is on **both** arms so it stays a controlled variable; the
+completion gate is left off, since it keys on the run's first completion of
+*any* level and an easy level unlocks it almost immediately in a 12-level run.
 
 Chosen 2026-07-29: **pretrain + annealed mix**, all subjects. The anneal is the
 point — a one-hot BC anchor that never fades drags on the policy indefinitely,
 which is what `mix_ratio_schedule` was added for. Schedule thresholds are RL
 train steps and the 50K pretrain offset is applied automatically.
 
-**Run the benchmark leg first.** The 2-GPU split and 64-worker throughput have
-never run in production:
-`bash scripts/submit_curriculum.sh bench-2gpu 1 training.total_env_steps=200_000`.
+**The benchmark leg was run first** and passed (job 5989959, 2026-08-12):
+~111 env-steps/s on the 2-GPU split.
 
 **Caveat — the human arm covers 11 of 12 levels.** Verified against the corpus
 2026-07-29: there is no `level-w2l2`, i.e. **Level2-2 has zero human data**
@@ -489,10 +508,13 @@ never run in production:
 `env.levels`). The autocurriculum will keep sampling Level2-2 and the human
 buffer contributes nothing there, so any T7 win must be checked per level
 before it is attributed to the human teacher. `levels: match_env` filters by
-filename tag and will simply find no w2l2 files — confirm the loader tolerates
-a requested level with zero matches rather than raising.
+filename tag and will simply find no w2l2 files — **still unconfirmed at
+launch**: check on arm B's first leg that the loader tolerates a requested
+level with zero matches rather than raising. Also confirm there that the
+~56 GB corpus load fits the 220 G/job (110 G x 2 GPUs) alongside the 1M-
+transition buffer.
 
-## T8 — Distillation into one all-level model (blocked on T6)
+## T8 — Distillation into one all-level model (**unblocked; dumper written 2026-08-24**)
 
 Goal: turn the 12 T6 specialists into a single model that plays all 12 levels.
 Mechanism chosen 2026-07-29: **teacher corpus → BC pretrain → RL with an
@@ -611,6 +633,31 @@ time; dump to the cap, not beyond it.
 Newest first. One line per thing actually done, so the state above can be read
 without reconstructing it from SLURM history.
 
+- **2026-08-24** — **T7 launched**: `curriculum-nohuman` (6115540-6115543) and
+  `curriculum-human` (6115544-6115548), 4 legs each, both with the eps anneal
+  `[[0,0.25],[3000000,0.05]]`. Also: T8 dumper written and round-trip verified
+  (`58eeb56`), backlog brought current, 5.8 GB stray `core` removed from the
+  repo root.
+- **2026-08-24** — **Run-through benchmark** (job 6083435) →
+  `images/human_vs_agent_runthrough.pdf`. Each level's `best.pt` played through
+  its level 5x with stochastic starts: **5/12 levels finish at all, and every
+  one that finishes beats the human median time**; 7/12 never finish. 1-1
+  stalls at exactly x=2370 from five different starts despite a 0.72-0.91
+  self-play rate. This is the clearest measurement yet of how much the fleet's
+  headline numbers depend on exploration noise.
+- **2026-08-21** — **Human comparison shipped** (`ab0ceab`): `human_compare:`
+  scores every checkpoint replay against a human on the same level. Fixed two
+  scale bugs found doing it — the comparator must be the human *first-life*
+  rate, and `run_replay_rollout` had never been passed the run's
+  `completion_bonus`, so `replay/<level>_return` was mis-scaled in every run
+  to date.
+- **2026-08-20** — **Imitation rescue finished** (`0c9aed7`): `spec-imit-level1-3`
+  escaped outright (0.00 → **0.85**, greedy replay completes, faster to the flag
+  than the median human); `spec-imit-level4-3` only cracked open (0.01, first
+  completion at 79% of budget).
+- **2026-08-16** — **T6 fleet #2 finished**: all 12 specialists reached
+  `TRAINING_COMPLETE` at 15M env steps. Level1-3 and Level4-3 ended at 0.00
+  completions, which is what motivated the imitation rescue.
 - **2026-08-14** — **T6 fleet #2 queued**: jobs **6017303-6017326** (12 × 2
   legs via `submit_specialist.sh`, identical recipe), resuming fleet #1's
   ~40K-step checkpoints through the normal `latest.pt` auto-resume path.
