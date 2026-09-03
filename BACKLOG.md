@@ -3,7 +3,13 @@
 **Status (2026-08-24): T6 fleet #2 is done (all 12 specialists at 15M env
 steps), the two dead levels were rescued with human demos, per-checkpoint
 human comparison is in, and T7 is launched. T8 is unblocked and its dumper is
-written. The headline caveat: the fleet's completion rates lean heavily on
+written. **T9's self-play pass finished 2026-09-03**: 11 specialists for the levels
+that have brain data but no model (w5l1-w8l3), 7 of 11 completing; the 4
+zeros are in an imitation rescue and the greedy benchmark is re-running
+across all 23 levels. **T7 stalled 2026-08-28 having run out of chained legs
+at 39.4M/36.0M of its 60M budget and was relaunched 2026-09-02**; a
+leg-budget warning in `submit_chain.sh` now catches that class of mistake at
+submit time. The headline caveat: the fleet's completion rates lean heavily on
 exploration noise — 7 of 12 specialists cannot complete their own level
 greedily.**
 
@@ -29,8 +35,9 @@ greedily.**
 - **The run-through benchmark (job 6083435) is the important new result.**
   `images/human_vs_agent_runthrough.pdf`: each level's `best.pt` played through
   its level 5x with stochastic starts. **5 of 12 levels finish at all; every
-  level that finishes beats the human median time** (3-3 at 391 steps vs 830
-  even beats the human p10). But 7 of 12 never finish — including 1-1, which
+  level that finishes beats the human median time** (3-3 at 391 steps vs 830 is
+  the widest margin; no level beats the human p10 — 3-3 comes closest at 391
+  against a p10 of 375). But 7 of 12 never finish — including 1-1, which
   scores 0.72-0.91 in noisy self-play yet stalls at exactly x=2370 from five
   different starts. Level3-1 completed its *deterministic* training replay in
   811 steps and scores 0/5 here, so it is start-fragile, not merely
@@ -52,7 +59,20 @@ Next actions, in order:
 2. **Run the T8 dumper** once T7 is stable enough to share the queue:
    `scripts/dump_specialist_trajectories.py`. Two corrections to the plan
    below are already applied — see T8.
-3. **Decide the T8 teacher-quality bar.** The dumper filters to completing
+3. **Read T7's resumed legs** (6249958-6249963, queued 2026-09-02). Both arms
+   should now reach 60M; confirm the human arm's lead over arm A survives to
+   the end of the budget before reading anything into it.
+4. **Read the greedy benchmark** (job 6274769) — how many of T9's 7 completing
+   models finish greedily, against 5 of 12 for the original fleet.
+5. **Read the T9 rescue** (6274783-6274790). Levels still at 0.00 at 15M are
+   done being chased; ship them as-is or not at all.
+6. **Repackage for the collaborator** once the rescue lands (deliberately
+   held until then — they already have the 12-level bundle, so the next one
+   should be the complete set):
+   `sbatch scripts/submit_package_models.sh` picks up new runs automatically
+   (selection is by recorded best rate, not a hard-coded list), taking the
+   bundle from 12 to 23 levels.
+7. **Decide the T8 teacher-quality bar.** The dumper filters to completing
    episodes, so a level whose specialist rarely completes even *with* noise
    (4-3 at 0.01, 4-2 at 0.14) will be thin or empty in the corpus; the script
    reports which levels came up short. Those levels may need the imitation
@@ -77,6 +97,7 @@ Next actions, in order:
 | Run-through benchmark | — | — | — | **done 2026-08-24**, job 6083435 → `images/human_vs_agent_runthrough.pdf` |
 | `bench-2gpu` (T4 benchmark leg) | 200K env / 8K train | — | — | **done 2026-08-12**, job 5989959: 30 min, ~111 env-steps/s on the 2-GPU split |
 | `curriculum-v1` (12 levels, 60M) | — | — | — | **superseded** — launched as T7's two named arms instead |
+| T9 fleet (11 levels, w5l1-w8l3) | — | — | — | **launched 2026-09-01**, jobs 6238199-6238220 (11 chains x 2 legs) |
 | `curriculum-nohuman` (T7 arm A) | — | — | — | **launched 2026-08-24**, jobs 6115540-6115543 (4 legs) |
 | `curriculum-human` (T7 arm B) | — | — | — | **launched 2026-08-24**, jobs 6115544-6115548 (4 legs), BC pretrain 50K + mix anneal |
 
@@ -472,7 +493,45 @@ Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
 policy dies at x=850, and 4-x are unattempted.
 
-## T7 — Autocurriculum ± human teacher (**launched 2026-08-24**)
+## T7 — Autocurriculum ± human teacher (**stalled 2026-08-28, relaunched 2026-09-02**)
+
+**T7 ran out of legs and nobody noticed for four days.** Both arms were
+submitted with `submit_curriculum.sh`'s default `N_LEGS=4` against a 60M
+env-step budget. Every leg exited `TIMEOUT 0:0` at the 24h wall — which *is*
+the designed resume path — and the fourth leg simply had nothing to hand off
+to. Final leg ended 2026-08-28T19:56 (arm A) / 19:58 (arm B) at
+**39.4M and 36.0M env steps**, no `TRAINING_COMPLETE`, nothing in the queue,
+`.err` files containing only wandb banners. A run out of legs is
+indistinguishable from a finished one at a glance.
+
+The arithmetic was wrong at launch, and was knowable then: `bench-2gpu`
+measured ~111 env-steps/s on 2026-08-12. Arm A managed 114/s (39.4M in 96h),
+arm B 104/s (36.0M — slower for the 50K BC pretrain, which collects no env
+steps, plus mixed-batch cost). 60M therefore needs ~6.1 / ~6.7 legs, not 4.
+
+**Fix, 2026-09-02:** 3 more legs each, jobs **6249958-6249960** (arm A) and
+**6249961-6249963** (arm B), resumed from `latest.pt` with the arms' recorded
+overrides re-passed verbatim from their `.hydra/overrides.yaml`. Arm B keeps
+`imitation.enabled=true` even though its mix ratio annealed to 0 at train step
+750K and contributes nothing further: `human_compare` scores action-agreement
+on the imitation loader's holdout *only when imitation is enabled*, so turning
+it off mid-run would silently start scoring on files the model trained on.
+Resuming past `pretrain_steps` is safe (start_step 1.75M >> 50K, pretrain is a
+no-op).
+
+**Guard added so this cannot recur silently:** `submit_chain.sh` now estimates
+whether `N_JOBS` can reach `training.total_env_steps` at ~110 env-steps/s
+(`MUZERO_ENV_STEPS_PER_SEC` overrides) against the leg script's own
+`#SBATCH --time`, and warns with the leg count actually needed. It subtracts
+progress already banked in `latest.pt`, so a resumed chain is not told to
+re-budget the whole run. `MUZERO_CHAIN_DRY_RUN=1` runs the check and submits
+nothing. Validated against the failure it exists for: it predicts 4 legs reach
+~38.0M against the 39.4M/36.0M actually observed.
+
+**Early read (weak — a 12-level pooled rate):** arm B 0.08 at 36.0M, arm A
+0.02 at 39.4M and flat since 23.9M. The human arm is ahead at fewer env steps.
+
+
 
 Two runs off `submit_curriculum.sh`, identical except for the `imitation:`
 block:
@@ -519,6 +578,75 @@ buffer.
 **Level2-2 is the natural control for this arm.** It is the one level where the
 human teacher contributes nothing, so if arm B beats arm A *there* too, the win
 is not coming from the demos.
+
+## T9 — Brain-data level coverage (**self-play pass done 2026-09-03**)
+
+**All 11 reached `TRAINING_COMPLETE` at 15M env steps** (jobs 6238199-6238220),
+finishing 2026-09-03. Seven completed their level at least once:
+
+| Level | Best rate | First completion (RL step) |
+|---|---|---|
+| 6-1 | **0.93** | 39,848 |
+| 5-1 | **0.73** | 102,126 |
+| 6-3 | **0.70** | 181,493 |
+| 7-1 | 0.48 | 30,883 |
+| 6-2 | 0.25 | 125,070 |
+| 8-3 | 0.03 | 150,632 |
+| 8-1 | 0.01 | 619,389 (82% of budget) |
+| 5-2, 5-3, 7-3, 8-2 | **0.00** | never |
+
+Level6-1 at 0.93 ranks third across the whole fleet behind 3-2 and 3-3, so
+worlds 5-8 are not uniformly out of reach. But 4 of 11 dead against T6's 2 of
+12 confirms they are harder on average, and 8-1's 0.01 at 82% of budget is the
+same cracked-open-not-solved shape as 4-3.
+
+**Rescue pass launched 2026-09-03** for the four zeros — jobs 6274783-6274790,
+`submit_specialist_imitation.sh` on Level5-2/5-3/7-3/8-2. **Expect less than
+the 1-3 rescue delivered**: that level had 78 human completions to teach from
+and escaped to 0.85, while 4-3 had 60 and reached only 0.01. These have 13
+(w5l2), 19 (w5l3), 15 (w7l3) and **4** (w8l2). Thin teachers are the whole
+risk here.
+
+**Greedy run-through benchmark re-run 2026-09-03**, job 6274769, now covering
+all 23 levels with a trained run (the 4 with no `best.pt` skip themselves).
+`eval_human_benchmark.py`'s hard-coded 12-level `ALL_LEVELS` now derives from
+the run dirs, as `package_models.py` already does.
+
+
+
+Trigger (2026-09-01): a collaborator using these checkpoints against CNeuroMod brain data
+asked for models on every level they have brain data for. The bundle shipped
+2026-08-28 covers 12 levels; the human corpus covers 22. The overlap is 11 —
+**Level2-2 has a model but no human data, and w5l1-w8l3 have human data but no
+model.** So half the levels with brain data had nothing to compare against.
+
+Why the gap existed: the 12-level `env.levels` list predates the git history.
+`conf/env/mario.yaml` is absent from the initial commit (the code read
+`cfg.env.levels` against an untracked file) and first appears already formed in
+f91adf7. Most likely inherited from the `ppo_study` PPO baseline this repo is
+deliberately a sibling of — unverifiable here, since that repo was on BMRC and
+is not on Isambard. Either way it was chosen to serve a PPO comparison, not the
+brain-data one, and nobody revisited it when the human corpus landed.
+
+**Scope: 11 levels** — Level5-1/2/3, Level6-1/2/3, Level7-1, Level7-3,
+Level8-1/2/3. Not w7l2 (humans never played it, so no brain data) and not the
+castle -4s (same, plus a different terminal condition).
+
+**Recipe: pure self-play** (`submit_specialist.sh`, the exact T6 recipe), chosen
+deliberately over the imitation variant even though human demos with completions
+exist for all 11 (277 completions; thinnest are w8l2/w8l3 at 4 each). Reason:
+a model BC-pretrained on the same subjects' gameplay the fMRI comes from is
+confounded as evidence that its representations resemble those subjects' brains.
+The current bundle already mixes both kinds — 1-3 and 4-3 are imitation-trained,
+the other 10 are not — which is worth flagging to anyone analysing them as a set.
+Expect failures: worlds 5-8 are harder than 1-4 and the T6 recipe already
+produced 0.00 on 2 of 12 easier levels. Failures get the imitation rescue as a
+second pass, exactly as 1-3/4-3 did.
+
+Both submit scripts' hard-coded 12-level `VALID` gate now derives from the
+state files under `mario.stimuli/SuperMarioBros-Nes/`, so worlds 5-8 need no
+further edits. All 11 levels were verified to load, step and accrue shaped
+reward before launch (env-only check, login node).
 
 ## T8 — Distillation into one all-level model (**unblocked; dumper written 2026-08-24**)
 

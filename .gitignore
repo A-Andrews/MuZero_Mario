@@ -31,3 +31,5 @@ mario.stimuli
 
 # OS
 .DS_Store
+core
+core.*

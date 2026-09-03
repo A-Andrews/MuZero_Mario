@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -46,7 +47,22 @@ from src.muzero.human_baseline import compute_level_stats
 from src.muzero.networks import MuZeroNet
 from src.selfplay.replay_eval import run_replay_rollout
 
-ALL_LEVELS = [f"Level{w}-{s}" for w in (1, 2, 3, 4) for s in (1, 2, 3)]
+def discover_levels(runs_dir="outputs/runs") -> list:
+    """Every level with at least one trained specialist run, world-stage ordered.
+
+    Derived rather than hard-coded so a new fleet (T9 added worlds 5-8) appears
+    in the figure without editing this script. Levels whose run never wrote a
+    best.pt are still skipped downstream by `pick_run`.
+    """
+    seen = set()
+    for d in Path(runs_dir).glob("spec*-level*"):
+        tag = d.name.split("-level", 1)[1]
+        if re.fullmatch(r"\d+-\d+", tag):
+            seen.add("Level" + tag)
+    return sorted(seen, key=lambda L: tuple(int(x) for x in L.removeprefix("Level").split("-")))
+
+
+ALL_LEVELS = discover_levels()
 
 
 def git_sha() -> str:

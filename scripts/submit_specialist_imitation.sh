@@ -49,8 +49,14 @@ LEVEL="${1:?Usage: submit_specialist_imitation.sh <LEVEL> [N_LEGS] [overrides...
 N_LEGS="${2:-2}"
 shift $(( $# >= 2 ? 2 : $# ))
 
-VALID=(Level1-1 Level1-2 Level1-3 Level2-1 Level2-2 Level2-3
-       Level3-1 Level3-2 Level3-3 Level4-1 Level4-2 Level4-3)
+# Valid levels are whatever state files the integration actually ships,
+# so worlds 5-8 work without editing this list again.
+VALID=($(ls mario.stimuli/SuperMarioBros-Nes/Level*.state 2>/dev/null \
+        | sed 's|.*/||; s|\.state$||'))
+if [ "${#VALID[@]}" -eq 0 ]; then
+    echo "error: no .state files under mario.stimuli/SuperMarioBros-Nes/" >&2
+    exit 1
+fi
 ok=0
 for v in "${VALID[@]}"; do [ "${v}" = "${LEVEL}" ] && ok=1 && break; done
 if [ "${ok}" != 1 ]; then
