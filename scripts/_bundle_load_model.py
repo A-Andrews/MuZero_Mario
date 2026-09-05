@@ -55,6 +55,56 @@ def as_input(obs, device: str = "cpu") -> torch.Tensor:
     return t.float().div(255.0) if t.dtype == torch.uint8 else t.float()
 
 
+def frames_to_obs(frames, n_frame: int = 4, downsample: int = 4, pad_to: int = 96):
+    """Raw RGB frames -> (N, 4, 96, 96) uint8, one observation per agent step.
+
+    Use this if you are feeding your own stimulus frames rather than the
+    supplied .npz corpus. `frames` is a sequence of full-resolution RGB frames
+    at the emulator's native 60 Hz, in order, starting from the first frame you
+    want a model observation for.
+
+    This reproduces exactly what the training workers and the .bk2 converter do,
+    and getting it right by hand is easy to botch:
+
+    - One agent step consumes `downsample` (4) emulator frames, so you get
+      len(frames)//4 observations, not len(frames).
+    - Each of the 4 channels is the pixel-wise max of two *consecutive* frames
+      (NES sprite-flicker removal), taken at strided offsets through a 16-frame
+      history — not 4 evenly spaced single frames.
+    - The observation for step t is built from the 16 frames *preceding* that
+      step's own 4 frames, matching the (s_t, a_t, r_t) convention.
+    - The first observation needs 16 frames of history that do not exist, so the
+      history is seeded by repeating the opening frame, exactly as the converter
+      does on reset and after each respawn. `frames[0]` is that seed frame and
+      is NOT itself consumed as step data; steps consume `frames[1:]`, four at a
+      time, so you get (len(frames) - 1) // 4 observations.
+
+    Returns uint8 in [0, 255]; pass it straight to `encode` / `policy_value`,
+    which divide by 255.
+    """
+    from collections import deque
+    from src.env.preprocess import grayscale_resize, stack_max_pooled
+
+    frames = list(frames)
+    if not frames:
+        return np.zeros((0, n_frame, pad_to, pad_to), dtype=np.uint8)
+
+    hist = deque(maxlen=n_frame * downsample)
+    seed = grayscale_resize(np.asarray(frames[0]))
+    for _ in range(n_frame * downsample):
+        hist.append(seed)
+
+    rest = frames[1:]
+    out = []
+    for t in range(len(rest) // downsample):
+        # Observation first, then consume this step's frames — (s_t, a_t).
+        stacked = stack_max_pooled(hist, n_frame, downsample, pad_to=pad_to)
+        out.append((stacked * 255.0).clip(0, 255).astype(np.uint8))
+        for f in rest[t * downsample:(t + 1) * downsample]:
+            hist.append(grayscale_resize(np.asarray(f)))
+    return np.stack(out) if out else np.zeros((0, n_frame, pad_to, pad_to), dtype=np.uint8)
+
+
 @torch.no_grad()
 def encode(net: MuZeroNet, obs, device: str = "cpu", batch_size: int = 256) -> np.ndarray:
     """Encoder activations: (B, hidden_channels, 6, 6), min-max normalised per sample."""
@@ -101,6 +151,9 @@ def main() -> int:
     ap.add_argument("--checkpoint", default=None, help="explicit path, overrides --level")
     ap.add_argument("--npz", default=None,
                     help="an npz with an (N,4,96,96) uint8 'obs_stacks' member")
+    ap.add_argument("--frames", default=None,
+                    help="a .npy of raw RGB frames (T,H,W,3) at 60 Hz; preprocessed "
+                         "for you via frames_to_obs (needs opencv-python)")
     ap.add_argument("--out", default=None, help="write features to this .npz")
     ap.add_argument("--device", default="cpu")
     args = ap.parse_args()
@@ -120,12 +173,16 @@ def main() -> int:
     net = load_model(ckpt, args.device)
     print(f"Loaded {ckpt}  (train step {net.training_step}, env step {net.env_step})")
 
-    if args.npz is None:
-        obs = np.zeros((2, 4, 96, 96), dtype=np.uint8)
-        print("No --npz given; running a shape check on zeros.")
-    else:
+    if args.frames is not None:
+        raw = np.load(args.frames)
+        obs = frames_to_obs(raw)
+        print(f"Loaded {args.frames}: {raw.shape} raw frames -> {obs.shape} observations")
+    elif args.npz is not None:
         obs = np.load(args.npz)["obs_stacks"]
         print(f"Loaded {args.npz}: {obs.shape} {obs.dtype}")
+    else:
+        obs = np.zeros((2, 4, 96, 96), dtype=np.uint8)
+        print("No --npz/--frames given; running a shape check on zeros.")
 
     h = encode(net, obs, args.device)
     probs, values = policy_value(net, obs, args.device)

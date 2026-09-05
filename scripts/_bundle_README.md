@@ -56,6 +56,27 @@ Input is a 4-frame stack of 96×96 grayscale, stored as `uint8` and divided by
 preprocessed any other way, the activations are not comparable to anything
 these agents were trained on.
 
+**Feeding your own frames?** Use `load_model.frames_to_obs(frames)` rather than
+assembling the stack yourself — pass raw RGB frames at the emulator's native
+60 Hz and it returns `(N, 4, 96, 96)` uint8, one observation per agent step:
+
+```python
+from load_model import load_model, frames_to_obs, encode
+obs = frames_to_obs(my_rgb_frames)      # (T,H,W,3) -> (T//4, 4, 96, 96)
+h   = encode(load_model("checkpoints/Level1-1.pt"), obs)
+```
+
+or from the CLI: `python load_model.py --level Level1-1 --frames my_frames.npy`.
+
+It is easy to get this wrong by hand, and a wrong stack yields plausible but
+meaningless activations. The four channels are **not** four evenly spaced
+frames: each is the pixel-wise max of two *consecutive* frames sampled at
+strided offsets through a 16-frame history, the observation for step *t* is
+built from the 16 frames *preceding* that step's own 4, and the first
+observation seeds its non-existent history by repeating the opening frame.
+`frames_to_obs` reproduces the training/converter pipeline exactly — verified
+byte-identical against a converted human .bk2 segment (992/992 observations).
+
 ## Two kinds of model in this bundle, and one that never finished
 
 `manifest.json` records the training run behind every level. Three categories,
