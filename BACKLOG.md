@@ -75,14 +75,31 @@ blocks someone else's work, not just ours.
 
 Next actions, in order:
 
-1. **Fix the frame-index gap in `convert_human_bk2.py` — this blocks the brain
-   comparison.** `outputs/human_trajectories/` cannot be aligned
-   frame-accurately to the fMRI: segments split at deaths, title-card/respawn
-   frames are dropped, and no absolute .bk2 frame index is stored (only
-   per-segment step counts in `conversion_report.json`), so cumulative agent
-   steps do not map linearly onto the .bk2 timeline. Emit a frame-index array
-   per segment and re-run the conversion. Every model we have is unusable for
-   TR-aligned encoding models until this exists.
+1. **Ask the collaborator how they source frames — this decides whether the
+   frame-index gap matters at all.** Two paths, and only one is blocked:
+   - **They feed their own stimulus frames** (their own replay or movie,
+     already aligned to their fMRI). Then our corpus is optional and the only
+     real risk is **preprocessing parity** — the 4 channels are maxima of
+     consecutive frame pairs at strided offsets through a 16-frame history, not
+     4 evenly spaced frames, and a wrong stack yields plausible but meaningless
+     activations. **Addressed 2026-09-05**: the bundle now ships
+     `load_model.frames_to_obs()`, verified byte-identical to the converter on
+     a real .bk2 segment (992/992). Nothing further needed.
+   - **They use `outputs/human_trajectories/`.** Then it *is* blocked, and
+     fixing it is the top priority: the corpus cannot be aligned
+     frame-accurately to fMRI. `convert_human_bk2.py` never records a frame
+     index — the intro skip (measured **124 frames** on one w1l1 rep, and it
+     varies by level and rep), each death-animation skip, and the short final
+     window of each segment are all unrecorded, so cumulative agent steps do
+     not map onto the .bk2 timeline. **Even segment 0 is offset**, by the intro
+     skip, so no observation in the corpus is correctly placed; and 75% of reps
+     (2,518 of 3,374) carry three such gaps. Nothing is lost — .bk2 replay is
+     frame-exact and deterministic — so the fix is to track a counter across
+     every `movie.step()` (including both skip loops), emit a per-step frame
+     index, and re-run the conversion.
+
+   Do not do the re-run before asking. It was ranked #1 here on the assumption
+   they use our corpus, which was never established.
 2. **Send the bundle** at `/projects/u6oz/atdandrews/MuZero_Mario/exports/`.
    Tell the recipient explicitly that the 5 `spec-imit-*` models were
    BC-pretrained on the same subjects' gameplay their fMRI comes from and are
