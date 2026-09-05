@@ -20,15 +20,16 @@ are finished; nothing is mid-experiment.**
 - **T8 has never been run.** Its dumper is written and it is the natural next
   experiment.
 
-**In flight at the moment of pausing** (both should have landed on their own; if
-not, just resubmit — neither has side effects beyond its own outputs):
-- job **6338095**, `submit_human_benchmark.sh` — greedy run-through benchmark
-  across the 22 levels with a `best.pt`, rewriting
-  `images/human_vs_agent_runthrough.{pdf,json}`.
-- job **6338250**, `submit_package_models.sh --include-incomplete --pin
-  Level5-3=spec-level5-3` — chained `afterok` behind it, writing the 23-level
-  collaborator bundle (~1.1 GB zipped) to
-  `/projects/u6oz/atdandrews/MuZero_Mario/exports/`.
+**Both closing jobs landed before the pause:**
+- job 6338095 — greedy benchmark across the 22 levels with a `best.pt`:
+  **10 of 22 finish greedily**, against 5/12 for the original fleet. Best are
+  1-3, 3-3 and 6-1 at 5/5; the rescues 5-2 (3/5) and 7-3 (2/5) finish greedily
+  despite low self-play rates, while 8-2 — the best rescue at 0.52 self-play —
+  is 0/5 and therefore entirely noise-dependent. Figure and JSON are committed.
+- job 6338250 — **the deliverable**:
+  `/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905.zip`,
+  23 checkpoints, **1123 MB**, manifest at sha e8a962b. Level5-3 is correctly
+  marked `completed_level: false` / `latest.pt`.
 
 **Where to pick this up:** the numbered list below. Item 1 is the one that
 blocks someone else's work, not just ours.
