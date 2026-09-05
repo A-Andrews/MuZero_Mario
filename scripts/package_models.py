@@ -96,29 +96,49 @@ def read_best_rate(run: str) -> float | None:
         return None
 
 
-def select_checkpoints(levels: list[str], explicit: bool = True) -> list[dict]:
-    """Pick the winning run per level: highest recorded self-play rate."""
+def select_checkpoints(levels: list[str], explicit: bool = True,
+                       allow_latest: bool = False, pins: dict | None = None) -> list[dict]:
+    """Pick the winning run per level: highest recorded self-play rate.
+
+    A level whose runs never completed has no `best.pt` (it is only written on a
+    new completion-rate high). With `allow_latest` such a level falls back to
+    `latest.pt` — the final checkpoint of a run that never finished the level —
+    and the entry is marked so the manifest never passes it off as a best.
+    `pins` forces a specific run for a level, which is how a fallback picks
+    between two equally-uncompleted runs on measured evidence rather than
+    alphabetical order.
+    """
     bench = {}
     if BENCHMARK.exists():
         for row in json.loads(BENCHMARK.read_text()).get("levels", []):
             bench[row["level"]] = row
+    pins = pins or {}
 
     chosen = []
     for level in levels:
         tag = level.replace("Level", "level")
-        candidates = []
-        for run in (f"spec-{tag}", f"spec-imit-{tag}"):
-            ckpt = RUNS / run / "checkpoints" / "best.pt"
-            if ckpt.exists():
-                candidates.append((read_best_rate(run), run, ckpt))
+        runs = [pins[level]] if level in pins else [f"spec-{tag}", f"spec-imit-{tag}"]
+
+        candidates = [(read_best_rate(r), r, RUNS / r / "checkpoints" / "best.pt", "best.pt")
+                      for r in runs if (RUNS / r / "checkpoints" / "best.pt").exists()]
+        fallback = False
+        if not candidates and allow_latest:
+            candidates = [(None, r, RUNS / r / "checkpoints" / "latest.pt", "latest.pt")
+                          for r in runs if (RUNS / r / "checkpoints" / "latest.pt").exists()]
+            fallback = bool(candidates)
+
         if not candidates:
             if explicit:
-                print(f"  !! {level}: no best.pt in spec-{tag} or spec-imit-{tag}, skipping")
+                print(f"  !! {level}: no checkpoint in spec-{tag} or spec-imit-{tag}, skipping")
             continue
-        # A run that never completed has no best.json; -1 keeps it last but usable.
-        rate, run, ckpt = max(candidates, key=lambda c: (c[0] if c[0] is not None else -1.0))
+
+        rate, run, ckpt, kind = max(candidates, key=lambda c: (c[0] if c[0] is not None else -1.0))
         entry = {"level": level, "run": run, "source_checkpoint": str(ckpt.relative_to(REPO)),
-                 "selfplay_completion_rate": rate}
+                 "selfplay_completion_rate": rate, "checkpoint_kind": kind}
+        if fallback:
+            entry["completed_level"] = False
+            entry["note"] = ("this run never completed the level, so no best.pt exists; "
+                             "this is the final checkpoint of the run")
         b = bench.get(level)
         if b and b.get("run") == run:
             entry["greedy_runthrough"] = {
@@ -173,6 +193,10 @@ def main() -> int:
     ap.add_argument("--human-data", action="store_true",
                     help="also archive outputs/human_trajectories (~1.9G, stored not deflated)")
     ap.add_argument("--name", default=None, help="bundle name (default muzero_mario_models_<date>)")
+    ap.add_argument("--include-incomplete", action="store_true",
+                    help="also ship levels whose runs never completed, using latest.pt")
+    ap.add_argument("--pin", action="append", default=[], metavar="LEVEL=RUN",
+                    help="force a run for a level, e.g. --pin Level5-3=spec-level5-3")
     args = ap.parse_args()
 
     sha, dirty = git_sha()
@@ -186,8 +210,10 @@ def main() -> int:
     print(f"Staging -> {stage}")
 
     print("Selecting checkpoints...")
+    pins = dict(p.split("=", 1) for p in args.pin)
     chosen = select_checkpoints(args.levels or all_levels(),
-                                explicit=args.levels is not None)
+                                explicit=args.levels is not None,
+                                allow_latest=args.include_incomplete, pins=pins)
     if not chosen:
         print("No checkpoints found; nothing to package.", file=sys.stderr)
         return 1
@@ -220,7 +246,8 @@ def main() -> int:
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "git_sha": sha,
         "git_dirty": dirty,
-        "checkpoint_kind": "best.pt (highest rolling self-play completion rate)",
+        "checkpoint_kind": "per level: best.pt (highest rolling self-play completion "
+                           "rate) unless the level entry says latest.pt",
         "n_levels": len(chosen),
         "architecture": arch,
         "obs_spec": {

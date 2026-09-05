@@ -173,6 +173,20 @@ fresh run_name). Three mechanisms keep the chain sane:
   configured budget (raise `training.total_env_steps` or delete the sentinel to
   train further), and `submit_autocurriculum.sh` walks + `scancel`s the pending
   dependent legs.
+- **`submit_chain.sh` warns when N_JOBS cannot reach the env-step budget.** It
+  reads the leg script's own `#SBATCH --time`, takes `training.total_env_steps`
+  from the overrides (else the config), assumes ~110 env-steps/s
+  (`MUZERO_ENV_STEPS_PER_SEC` overrides) and prints the leg count actually
+  needed, subtracting progress already banked in `latest.pt` so a resumed chain
+  is not told to re-budget the whole run. `MUZERO_CHAIN_DRY_RUN=1` runs the
+  check and submits nothing. Why: T7 was submitted with the default 4 legs
+  against 60M env steps and stopped 4 days later at 39.4M/36.0M. Every leg
+  exited `TIMEOUT 0:0` — the designed resume path — so nothing looked wrong:
+  no sentinel, no error, no queue entry, `.err` files holding only wandb
+  banners. The sentinel mechanism cancels *surplus* legs; nothing detected the
+  shortfall. **A chain out of legs is indistinguishable from a finished run at
+  a glance — check `TRAINING_COMPLETE` exists, not just that the queue is
+  empty.**
 - **Never `put` on a worker-shared mp.Queue from the learner process at shutdown**
   (see `InferenceServer.stop`): terminated workers can die holding the queue's
   write-lock and the learner's QueueFeederThread then deadlocks interpreter exit —
@@ -200,6 +214,8 @@ The coordinator (`src/selfplay/coordinator.py`) owns the queues/pipes and wires 
 Replay buffer (`src/muzero/buffer.py`) is a prioritized trajectory buffer; ingested trajectories keep the worker-computed per-step priorities. Targets (n-step value bootstrap, reward sequence, MCTS policy) are computed in `src/muzero/targets.py` with help from `src/muzero/returns.py`; with `muzero.reanalyze` on, `build_reanalyze_targets` additionally emits bootstrap observations + discount factors so the learner recomputes value targets against a lagged target net at sample time. Action-selection temperature schedule lives in `src/muzero/temperature.py` (piecewise **constant** — steps down at thresholds). `src/muzero/schedules.py` is the piecewise-**linear** counterpart shared by `imitation.mix_ratio_schedule` and `mcts.root_exploration_eps_schedule`.
 
 Environment wrappers (`src/env/`) are ported from `ppo_study` — stable-retro NES emulation (`emulation.py`), Mario action set (`mario_actions.py`), and frame preprocessing (`preprocess.py`). The level list is configured via `env.levels` and corresponds to state files in `mario.stimuli/`.
+
+**`conf/env/mario.yaml`'s 12 levels (worlds 1-4, stages 1-3) are a default, not the scope.** That list predates the git history — it is absent from the initial commit and appears already formed in f91adf7, most likely inherited from the `ppo_study` PPO baseline. It was therefore chosen to serve a PPO comparison, not the brain-data one, and it covers only half the 22 levels with human recordings. T9 (2026-09) trained specialists for the missing worlds 5-8; `mario.stimuli/SuperMarioBros-Nes/` ships state files for all 34 levels including the castle -4s and the 5-x/6-x warps.
 
 ## Config
 
@@ -263,6 +279,48 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
   the deterministic-env diag baselines; pass them explicitly to evaluate under
   the training start distribution.
 - `worker.torch_threads` / `learner_torch_threads` — kept at 1 to avoid oversubscription across the worker pool.
+
+### Shipping models to collaborators (`package_models.py`)
+
+`sbatch scripts/submit_package_models.sh [args]` builds a self-contained zip a
+collaborator can unzip and use with **nothing from this repo and no
+stable-retro/ROM install** — written for the CNeuroMod brain-data comparison.
+Output goes to `/projects/u6oz/atdandrews/MuZero_Mario/exports/`, never home.
+
+What it does: strips optimizer/scheduler/RNG state from each level's chosen
+checkpoint (271 MB → 90 MB, 49 MB zipped), copies `networks.py`,
+`transforms.py` and `preprocess.py` under a `code/src/...` tree (with an
+**empty** `src/env/__init__.py`, since the real one imports the whole emulation
+stack), and emits `manifest.json` (per-level run, train/env step, self-play
+rate, greedy run-through stats, sha256), a standalone `load_model.py` and a
+README. Templates for the last two are `scripts/_bundle_{load_model.py,README.md}`.
+
+- **Level selection is derived, not hard-coded.** Levels come from the run dirs,
+  and per level the `spec-<level>` and `spec-imit-<level>` runs compete on
+  recorded `best.json` rate. `eval_human_benchmark.py` and both
+  `submit_specialist*.sh` scripts do the same (the latter derive valid levels
+  from the shipped `.state` files), so a new fleet appears everywhere without
+  editing five lists. **This was a real bug source** — three separate
+  hard-coded 12-level lists silently excluded worlds 5-8.
+- `--include-incomplete` ships a level whose runs never completed, falling back
+  to `latest.pt` and marking the entry `completed_level: false` so the manifest
+  never passes it off as a best. `--pin LEVEL=RUN` forces a run.
+- **Two traps worth knowing when anyone loads these checkpoints**: the runs are
+  192-channel/10-dynamics-block nets, *not* the library defaults, so always
+  build from the checkpoint's own `cfg_snapshot["model"]`; and obs are stored
+  uint8 but the model wants `obs.float()/255.0`. `load_model.py` does both.
+- **The confound that matters for brain comparison**: `spec-imit-*` models were
+  BC-pretrained on the same CNeuroMod subjects' gameplay the fMRI comes from,
+  so they cannot serve as independent evidence that a model's representations
+  resemble those subjects' brains. The bundle README flags them as a separate
+  group; say it explicitly when sending.
+
+**Known gap, unfixed:** `outputs/human_trajectories/` cannot be aligned
+frame-accurately to the fMRI. Segments split at deaths, title-card/respawn
+frames are dropped, and no absolute .bk2 frame index is stored — only
+per-segment step counts in `conversion_report.json` — so cumulative agent steps
+do not map linearly onto the .bk2 timeline. Fixing it means emitting a
+frame-index array from `convert_human_bk2.py` and re-running the conversion.
 
 ### The human run-through benchmark (`images/` figure job)
 

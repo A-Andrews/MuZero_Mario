@@ -56,6 +56,26 @@ Input is a 4-frame stack of 96×96 grayscale, stored as `uint8` and divided by
 preprocessed any other way, the activations are not comparable to anything
 these agents were trained on.
 
+## Two kinds of model in this bundle, and one that never finished
+
+`manifest.json` records the training run behind every level. Three categories,
+and the difference matters if you are relating these representations to human
+brain data:
+
+- **`spec-<level>`** — pure self-play. Never saw human gameplay.
+- **`spec-imit-<level>`** — self-play plus a human-demonstration rescue
+  (behavioural-cloning pretrain and an annealed human batch mix), used on levels
+  where self-play alone never completed the level once. These models were
+  trained on the same CNeuroMod subjects' gameplay the brain data comes from,
+  so they are **confounded** as evidence that a model's representations
+  resemble those subjects' brains. Treat them as a separate group, or exclude
+  them, depending on the claim.
+- **A level marked `"checkpoint_kind": "latest.pt"` with `"completed_level":
+  false`** — neither recipe ever completed this level, so no `best.pt` was ever
+  written and this is simply the final checkpoint of the run. It is included
+  because a model that plays the level badly is still a model of the level, but
+  it is not a competent agent: expect it to die at a fixed obstacle.
+
 ## Reading the numbers honestly
 
 - **Completion rates are with search noise on.** The self-play rates in

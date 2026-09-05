@@ -111,8 +111,9 @@ def main() -> int:
         for e in manifest["levels"]:
             g = e.get("greedy_runthrough") or {}
             gs = f"{g.get('n_completed')}/{g.get('n_rollouts')}" if g else "-"
+            flag = "" if e.get("completed_level", True) else "  NEVER COMPLETED (latest.pt)"
             print(f"{e['level']:<10} {e['run']:<20} {e['training_step']:>8} "
-                  f"{str(e['selfplay_completion_rate']):>8}  {gs}")
+                  f"{str(e['selfplay_completion_rate']):>8}  {gs}{flag}")
         return 0
 
     ckpt = args.checkpoint or str(BUNDLE / "checkpoints" / f"{args.level}.pt")
