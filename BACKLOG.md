@@ -542,6 +542,47 @@ Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
 policy dies at x=850, and 4-x are unattempted.
 
+## Comparison bundle — old models vs new (**built 2026-09-05**)
+
+Supervisor asked to compare earlier checkpoints against the current fleet, on
+the observation that the newer ones align better with certain brain regions.
+**Checked whether the intervening code changes invalidate that comparison: they
+do not.** From the oldest run's sha (3bac0a8, July) to HEAD, `networks.py`,
+`transforms.py` and `preprocess.py` are **byte-identical**; the 1,118 changed
+lines under `src/` are all learner / buffer / MCTS / worker / human-comparison
+machinery, and `env.py`'s 87 are purely the stochastic-start logic (the
+frames→observation mapping is untouched). All candidate runs also share the
+identical architecture (192ch, [2,2,2,2], 10 dyn, 22.6M params), observation
+pipeline (4 x skip-4 @ 96) and value/reward supports ([-25,25,201]). So the
+same frames through an old and a new checkpoint give directly comparable
+(N,192,6,6) activations — verified by running one frame batch through four of
+them.
+
+**The confound is not the code, it is that the four old runs are not
+equivalent to each other:**
+- `level1-1-diag-v1` (0.84) / `level1-2-diag-v1` (0.68) ran the *same* discount
+  0.999, bonus 200 and 15M budget as the current specialists, differing only in
+  stochastic starts and the eps anneal — the cleanest old-vs-new pair available.
+- `imit-all-v1` / `imit-sub01-v1` ran **discount 0.997, completion_bonus 100**,
+  i.e. pre-discount-fix, on 10M steps, 12 levels pooled, imitation on. Against
+  the current specialists that changes seven things at once plus raw competence,
+  so an alignment difference there is uninterpretable. **Compare them against
+  each other** (identical but for all-subjects vs sub-01 demos), where the
+  confound cancels.
+
+`exports/muzero_mario_comparison_20260905.zip`, 8 checkpoints, 396 MB, with
+three intended pairs documented in its generated README. Curriculum arms ship
+`latest.pt`, not `best.pt`, deliberately: arm A's best is from env step 23.9M
+where it plateaued, so best-vs-best would have compared 2.29M against 1.13M
+train steps and silently broken the matched pair.
+
+`package_models.py` gained what this needed: `--include-run RUN[:CKPT]` (ship a
+named run keyed by run name rather than level, so old and new models of the same
+level do not collide on `<level>.pt`, with an optional forced checkpoint),
+`--note` (a bundle-specific paragraph in its README) and a generated
+contents-table header so a bundle whose composition differs from the per-level
+fleet describes itself accurately.
+
 ## T7 — Autocurriculum ± human teacher (**DONE 2026-09-05 — the human arm wins**)
 
 **Both arms reached the full 60M env-step budget** (jobs 6249958-6249963; leg 3

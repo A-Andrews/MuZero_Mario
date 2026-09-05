@@ -152,6 +152,53 @@ def select_checkpoints(levels: list[str], explicit: bool = True,
     return chosen
 
 
+def select_runs(runs: list[str]) -> list[dict]:
+    """Entries for arbitrary named runs, keyed by run name rather than level.
+
+    Used to ship older or multi-level models (`level1-1-diag-v1`,
+    `curriculum-human`, ...) alongside the per-level fleet. Takes `best.pt`
+    where it exists and falls back to `latest.pt`, recording which. The level
+    list comes from the run's own cfg_snapshot, so a 12-level curriculum model
+    is labelled as such rather than pretending to be a single-level specialist.
+    """
+    chosen = []
+    for spec in runs:
+        # "RUN" takes best.pt then latest.pt; "RUN:latest.pt" forces one.
+        run, _, want = spec.partition(":")
+        d = RUNS / run / "checkpoints"
+        ckpt, kind = None, None
+        for name in ([want] if want else ["best.pt", "latest.pt"]):
+            if (d / name).exists():
+                ckpt, kind = d / name, name
+                break
+        if ckpt is None:
+            print(f"  !! {run}: no {want or 'best.pt or latest.pt'}, skipping")
+            continue
+        meta = torch.load(ckpt, map_location="cpu", weights_only=False)
+        levels = list((meta.get("cfg_snapshot") or {}).get("env", {}).get("levels") or [])
+        entry = {
+            "label": run,
+            "level": levels[0] if len(levels) == 1 else "multi",
+            "levels": levels,
+            "run": run,
+            "source_checkpoint": str(ckpt.relative_to(REPO)),
+            "selfplay_completion_rate": read_best_rate(run),
+            "checkpoint_kind": kind,
+        }
+        # "never completed" means no best.pt was ever written (it is only saved on
+        # a new completion-rate high) — NOT merely that latest.pt was shipped,
+        # which is often a deliberate choice to match two runs on budget.
+        if not (d / "best.pt").exists():
+            entry["completed_level"] = False
+            entry["note"] = ("this run never completed a level, so no best.pt exists; "
+                             "this is its final checkpoint")
+        elif kind == "latest.pt":
+            entry["note"] = ("latest.pt shipped deliberately, not this run's best.pt — "
+                             "so it matches its pair on training budget")
+        chosen.append(entry)
+    return chosen
+
+
 def strip_checkpoint(src: Path, dst: Path) -> dict:
     """Write weights + config + provenance, dropping optimizer/scheduler/rng."""
     ck = torch.load(src, map_location="cpu", weights_only=False)
@@ -195,6 +242,14 @@ def main() -> int:
     ap.add_argument("--name", default=None, help="bundle name (default muzero_mario_models_<date>)")
     ap.add_argument("--include-incomplete", action="store_true",
                     help="also ship levels whose runs never completed, using latest.pt")
+    ap.add_argument("--note", default=None,
+                    help="a paragraph describing this specific bundle, placed near the "
+                         "top of its README (e.g. how the models pair up)")
+    ap.add_argument("--include-run", action="append", default=[], metavar="RUN[:CKPT]",
+                    help="also ship this run, keyed by run name (e.g. level1-1-diag-v1), "
+                         "taking best.pt then latest.pt. Append ':latest.pt' to force one "
+                         "— needed to match two runs on training budget rather than on "
+                         "their individual bests. Repeatable.")
     ap.add_argument("--pin", action="append", default=[], metavar="LEVEL=RUN",
                     help="force a run for a level, e.g. --pin Level5-3=spec-level5-3")
     args = ap.parse_args()
@@ -211,27 +266,38 @@ def main() -> int:
 
     print("Selecting checkpoints...")
     pins = dict(p.split("=", 1) for p in args.pin)
-    chosen = select_checkpoints(args.levels or all_levels(),
-                                explicit=args.levels is not None,
-                                allow_latest=args.include_incomplete, pins=pins)
+    chosen = []
+    if args.levels != []:
+        chosen += select_checkpoints(args.levels or all_levels(),
+                                     explicit=args.levels is not None,
+                                     allow_latest=args.include_incomplete, pins=pins)
+    if args.include_run:
+        print("Adding named runs...")
+        chosen += select_runs(args.include_run)
     if not chosen:
         print("No checkpoints found; nothing to package.", file=sys.stderr)
         return 1
 
     arch = None
     for entry in chosen:
+        # `label` is the checkpoint's name in the bundle. It is the level for a
+        # per-level model, and the run name for a run added with --include-run,
+        # so old and new models of the same level can ship side by side without
+        # colliding on `<level>.pt`.
+        label = entry.setdefault("label", entry["level"])
         src = REPO / entry["source_checkpoint"]
-        dst = stage / "checkpoints" / f"{entry['level']}.pt"
+        dst = stage / "checkpoints" / f"{label}.pt"
         info = strip_checkpoint(src, dst)
         entry.update(info)
-        entry["file"] = f"checkpoints/{entry['level']}.pt"
+        entry["file"] = f"checkpoints/{label}.pt"
         ck_arch = torch.load(dst, map_location="cpu", weights_only=False)["cfg_snapshot"]["model"]
         if arch is None:
             arch = ck_arch
         elif ck_arch != arch:
             entry["architecture_differs"] = ck_arch
-            print(f"  !! {entry['level']}: architecture differs from the others")
-        print(f"  {entry['level']:<10} {entry['run']:<20} step {entry['training_step']:>8}  "
+            print(f"  !! {label}: architecture differs from the others — activations "
+                  f"are NOT directly comparable to the rest of this bundle")
+        print(f"  {label:<24} {entry['run']:<22} step {entry['training_step']:>8}  "
               f"{info['bytes']/1e6:6.1f} MB")
 
     print("Copying code...")
@@ -264,7 +330,31 @@ def main() -> int:
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     shutil.copy2(REPO / "scripts" / "_bundle_load_model.py", stage / "load_model.py")
-    shutil.copy2(REPO / "scripts" / "_bundle_README.md", stage / "README.md")
+
+    # The README template describes the per-level fleet. Prepend a generated
+    # header so a bundle with a different composition (older runs, multi-level
+    # curriculum models) describes itself accurately instead of inheriting a
+    # description that is wrong for it.
+    body = (REPO / "scripts" / "_bundle_README.md").read_text()
+    body = body.split("\n", 1)[1] if body.startswith("# ") else body
+    lines = [f"# MuZero-Mario models — `{name}`", "",
+             f"{len(chosen)} checkpoint(s), generated {manifest['generated']} "
+             f"from git `{sha}`.", ""]
+    if args.note:
+        lines += [args.note, ""]
+    lines += ["| label | run | checkpoint | train step | env step | self-play rate | levels |",
+              "|---|---|---|---|---|---|---|"]
+    for e in chosen:
+        lv = e.get("levels")
+        lvs = f"{len(lv)} levels" if lv and len(lv) > 1 else (lv[0] if lv else e["level"])
+        rate = e["selfplay_completion_rate"]
+        lines.append(f"| `{e['label']}` | `{e['run']}` | {e['checkpoint_kind']} | "
+                     f"{e['training_step']:,} | {e['env_step']:,} | "
+                     f"{'—' if rate is None else rate} | {lvs} |")
+    lines += ["", "Load any of them by label: `python load_model.py --level <label>`, "
+                  "or `load_model(\"checkpoints/<label>.pt\")`.", "",
+              "---", ""]
+    (stage / "README.md").write_text("\n".join(lines) + body)
 
     total = sum(e["bytes"] for e in chosen)
     print(f"Staged {len(chosen)} checkpoints, {total/1e6:.0f} MB raw")

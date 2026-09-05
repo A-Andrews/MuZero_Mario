@@ -147,7 +147,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", action="store_true", help="list bundled checkpoints and exit")
-    ap.add_argument("--level", default="Level1-1")
+    ap.add_argument("--level", default="Level1-1",
+                    help="which model, by its label in manifest.json — a level name "
+                         "(Level1-1) or, for a run shipped whole, its run name "
+                         "(level1-1-diag-v1). See --list.")
     ap.add_argument("--checkpoint", default=None, help="explicit path, overrides --level")
     ap.add_argument("--npz", default=None,
                     help="an npz with an (N,4,96,96) uint8 'obs_stacks' member")
@@ -160,13 +163,15 @@ def main() -> int:
 
     manifest = json.loads((BUNDLE / "manifest.json").read_text())
     if args.list:
-        print(f"{'level':<10} {'run':<20} {'step':>8} {'sp_rate':>8}  greedy")
+        print(f"{'label':<24} {'run':<22} {'step':>8} {'sp_rate':>8}  {'greedy':>7}  levels")
         for e in manifest["levels"]:
             g = e.get("greedy_runthrough") or {}
             gs = f"{g.get('n_completed')}/{g.get('n_rollouts')}" if g else "-"
-            flag = "" if e.get("completed_level", True) else "  NEVER COMPLETED (latest.pt)"
-            print(f"{e['level']:<10} {e['run']:<20} {e['training_step']:>8} "
-                  f"{str(e['selfplay_completion_rate']):>8}  {gs}{flag}")
+            lv = e.get("levels")
+            lvs = (f"{len(lv)} levels" if lv and len(lv) > 1 else (lv[0] if lv else e["level"]))
+            flag = "" if e.get("completed_level", True) else "  [never completed]"
+            print(f"{e.get('label', e['level']):<24} {e['run']:<22} {e['training_step']:>8} "
+                  f"{str(e['selfplay_completion_rate']):>8}  {gs:>7}  {lvs}{flag}")
         return 0
 
     ckpt = args.checkpoint or str(BUNDLE / "checkpoints" / f"{args.level}.pt")
