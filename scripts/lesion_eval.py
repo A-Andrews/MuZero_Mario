@@ -81,61 +81,67 @@ def build_net(cfg_model, state_dict, device):
 
 
 def evaluate_level(level, ckpt_path, conditions, rollouts, lesion_seeds,
-                   max_steps, base_seed, device):
+                   max_steps, base_seed, device, sims_list=None):
     state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     cfg = state["cfg_snapshot"]
     env_cfg, mcts_cfg = cfg["env"], cfg["mcts"]
     sd = state["online"]
 
+    # Sweeping num_simulations asks how much of the agent's competence comes
+    # from search rather than from the policy prior: a component that only
+    # becomes load-bearing at high simulation counts is one the search uses.
+    sims_list = sims_list or [int(mcts_cfg["num_simulations"])]
+
     results = []
-    for cond in conditions:
-        targets = CONDITIONS[cond]
-        # An unlesioned net is deterministic given the rollout seed, so extra
-        # lesion seeds would be identical repeats — run it once.
-        seeds = [0] if not targets else list(range(lesion_seeds))
-        for lseed in seeds:
-            # Fresh net per lesion: never stack a lesion on a damaged net.
-            net = build_net(cfg["model"], sd, device)
-            record = apply_lesion(net, targets, seed=lseed)
-            for i in range(rollouts):
-                info = {}
-                t0 = time.time()
-                _frames, ret, steps, completed = run_replay_rollout(
-                    level=level,
-                    int_path=env_cfg["int_path"],
-                    network=net,
-                    device=device,
-                    num_simulations=int(mcts_cfg["num_simulations"]),
-                    discount=float(cfg["muzero"]["discount"]),
-                    pb_c_base=float(mcts_cfg["pb_c_base"]),
-                    pb_c_init=float(mcts_cfg["pb_c_init"]),
-                    n_frame_stack=int(env_cfg["n_frame_stack"]),
-                    frame_skip=int(env_cfg["frame_skip"]),
-                    pad_to=int(cfg["model"]["input_spatial"])
-                    if env_cfg["pad_to_input_spatial"] else None,
-                    max_steps=max_steps,
-                    seed=base_seed + i,
-                    np_seed=base_seed + i,
-                    leaf_batch=int(mcts_cfg.get("leaf_batch", 1)),
-                    info_out=info,
-                    noop_max=int(env_cfg.get("noop_max", 0) or 0),
-                    skip_to_control=bool(env_cfg.get("skip_to_control", False)),
-                    completion_bonus=float(env_cfg.get("completion_bonus", 100.0)),
-                )
-                results.append(dict(
-                    level=level, condition=cond, lesion_seed=lseed,
-                    rollout_seed=base_seed + i, completed=bool(completed),
-                    steps=int(steps), ret=float(ret),
-                    final_x=int(info.get("final_x", 0)),
-                    timed_out=bool(info.get("timed_out", False)),
-                    params_reset=record["params_reset"],
-                    seconds=round(time.time() - t0, 1),
-                ))
-                r = results[-1]
-                print(f"  [{level}] {cond:<22} lseed={lseed} roll={i} "
-                      f"{'FINISHED' if r['completed'] else 'failed  '} "
-                      f"x={r['final_x']:<5} steps={r['steps']:<5} ({r['seconds']}s)",
-                      flush=True)
+    for n_sims in sims_list:
+        for cond in conditions:
+            targets = CONDITIONS[cond]
+            # An unlesioned net is deterministic given the rollout seed, so
+            # extra lesion seeds would be identical repeats — run it once.
+            seeds = [0] if not targets else list(range(lesion_seeds))
+            for lseed in seeds:
+                # Fresh net per lesion: never stack a lesion on a damaged net.
+                net = build_net(cfg["model"], sd, device)
+                record = apply_lesion(net, targets, seed=lseed)
+                for i in range(rollouts):
+                    info = {}
+                    t0 = time.time()
+                    _frames, ret, steps, completed = run_replay_rollout(
+                        level=level,
+                        int_path=env_cfg["int_path"],
+                        network=net,
+                        device=device,
+                        num_simulations=n_sims,
+                        discount=float(cfg["muzero"]["discount"]),
+                        pb_c_base=float(mcts_cfg["pb_c_base"]),
+                        pb_c_init=float(mcts_cfg["pb_c_init"]),
+                        n_frame_stack=int(env_cfg["n_frame_stack"]),
+                        frame_skip=int(env_cfg["frame_skip"]),
+                        pad_to=int(cfg["model"]["input_spatial"])
+                        if env_cfg["pad_to_input_spatial"] else None,
+                        max_steps=max_steps,
+                        seed=base_seed + i,
+                        np_seed=base_seed + i,
+                        leaf_batch=int(mcts_cfg.get("leaf_batch", 1)),
+                        info_out=info,
+                        noop_max=int(env_cfg.get("noop_max", 0) or 0),
+                        skip_to_control=bool(env_cfg.get("skip_to_control", False)),
+                        completion_bonus=float(env_cfg.get("completion_bonus", 100.0)),
+                    )
+                    results.append(dict(
+                        level=level, condition=cond, num_simulations=n_sims,
+                        lesion_seed=lseed, rollout_seed=base_seed + i,
+                        completed=bool(completed), steps=int(steps), ret=float(ret),
+                        final_x=int(info.get("final_x", 0)),
+                        timed_out=bool(info.get("timed_out", False)),
+                        params_reset=record["params_reset"],
+                        seconds=round(time.time() - t0, 1),
+                    ))
+                    r = results[-1]
+                    print(f"  [{level}] sims={n_sims:<4} {cond:<22} lseed={lseed} "
+                          f"roll={i} {'FINISHED' if r['completed'] else 'failed  '} "
+                          f"x={r['final_x']:<5} steps={r['steps']:<5} ({r['seconds']}s)",
+                          flush=True)
     return results
 
 
@@ -143,11 +149,11 @@ def summarise(results):
     """Per (level, condition): completion rate and median distance reached."""
     out = {}
     for r in results:
-        out.setdefault((r["level"], r["condition"]), []).append(r)
+        out.setdefault((r["level"], r["num_simulations"], r["condition"]), []).append(r)
     rows = []
-    for (level, cond), rs in out.items():
+    for (level, n_sims, cond), rs in out.items():
         rows.append(dict(
-            level=level, condition=cond, n=len(rs),
+            level=level, num_simulations=n_sims, condition=cond, n=len(rs),
             completion_rate=round(sum(x["completed"] for x in rs) / len(rs), 3),
             final_x_median=statistics.median(x["final_x"] for x in rs),
             final_x_mean=round(statistics.fmean(x["final_x"] for x in rs), 1),
@@ -166,6 +172,10 @@ def main() -> int:
     ap.add_argument("--rollouts", type=int, default=3, help="rollouts per lesion sample")
     ap.add_argument("--lesion-seeds", type=int, default=3,
                     help="independent re-initialisations per lesioned condition")
+    ap.add_argument("--sims", type=int, nargs="+", default=None,
+                    help="sweep MCTS num_simulations (default: the checkpoint's own). "
+                         "Use to test whether a component is only load-bearing when "
+                         "the search is deep enough to consult it.")
     ap.add_argument("--max-steps", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=4242)
     ap.add_argument("--checkpoint", default="best.pt")
@@ -193,7 +203,7 @@ def main() -> int:
                          checkpoint=str(ckpt), recorded_rate=rate))
         all_results += evaluate_level(
             level, ckpt, args.conditions, args.rollouts, args.lesion_seeds,
-            args.max_steps, args.seed, args.device)
+            args.max_steps, args.seed, args.device, sims_list=args.sims)
 
     rows = summarise(all_results)
     out = Path(args.out)
@@ -203,13 +213,14 @@ def main() -> int:
         lesion_convention="random re-initialisation at evaluation time only",
         rollouts_per_lesion=args.rollouts, lesion_seeds=args.lesion_seeds,
         max_steps=args.max_steps, base_seed=args.seed, device=args.device,
+        sims_swept=args.sims,
         models=meta, summary=rows, rollouts=all_results), indent=1) + "\n")
     print(f"\nwrote {out}")
 
-    print(f"\n{'level':<10} {'condition':<22} {'n':>3} {'complete':>9} {'x median':>9} {'params reset':>13}")
-    for r in sorted(rows, key=lambda x: (x["level"], -x["final_x_median"])):
-        print(f"{r['level']:<10} {r['condition']:<22} {r['n']:>3} "
-              f"{r['completion_rate']:>9} {r['final_x_median']:>9} {r['params_reset']:>13,}")
+    print(f"\n{'level':<10} {'sims':>5} {'condition':<22} {'n':>3} {'complete':>9} {'x median':>9}")
+    for r in sorted(rows, key=lambda x: (x["level"], x["num_simulations"], -x["final_x_median"])):
+        print(f"{r['level']:<10} {r['num_simulations']:>5} {r['condition']:<22} {r['n']:>3} "
+              f"{r['completion_rate']:>9} {r['final_x_median']:>9}")
     return 0
 
 
