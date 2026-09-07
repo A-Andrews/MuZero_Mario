@@ -600,11 +600,15 @@ wins — the human arm has no advantage exactly where it had no demonstrations t
 learn from. That is the pattern you would want if the advantage is really coming
 from the demos rather than from a lucky seed.
 
-**Caveat, and it is a big one: n=1 per level.** `replay_checkpoint.py` runs a
-single deterministic greedy rollout per level, so every cell above is one
-trajectory. The 8-of-12 split and the control result are suggestive, not
-established. Re-run with several stochastic-start rollouts per level before
-putting any weight on it.
+**Re-run at n=5 with stochastic starts (jobs 6383784/6383785) — the negative
+result holds and hardens.** Across 60 rollouts each: `curriculum-human`
+completes **1** (Level1-1, 694 steps), `curriculum-nohuman` completes **0**.
+1/60 against 0/60 is not a difference worth defending, so the honest statement
+is that **neither curriculum arm can finish any level greedily**, and T7's
+0.11-vs-0.02 lives entirely in noisy self-play. The n=1 return-based split
+(8 of 12 to the human arm, with Level2-2 the control) is not contradicted by
+this, but it was one trajectory per cell and remains unconfirmed — returns were
+not re-collected at n=5.
 
 ## T10 — Lesion study (**machinery built + pilot run 2026-09-07**)
 
@@ -692,6 +696,35 @@ Jobs **6384697** (Level8-2, Level5-2 — imitation) and **6384698** (Level1-1,
 Level3-2 — self-play) add two models of each kind to separate these. Note the
 comparison is not competence-matched — no two models of different recipe have
 the same self-play rate — so read it as a direction, not a clean contrast.
+
+### The recipe-vs-level confound test does not work with the models we have
+
+Job **6384697** (Level8-2, Level5-2 — both imitation-trained) came back
+**vacuous, and the reason generalises**: a lesion deficit is measured against an
+intact baseline, and these models have no baseline to speak of.
+
+| level | intact (n=3) | value | policy | reward |
+|---|---|---|---|---|
+| Level5-2 | **0.333** | 0.0 | 0.0 | 0.0 |
+| Level8-2 | **0.000** | 0.0 | 0.0 | 0.5 (!) |
+
+Level8-2's *intact* model completes 0 of 3 greedy rollouts, so every condition
+reads 0.0 and the lesion is unmeasurable; its reward row at 0.5 is noise against
+an n=3 baseline of zero, not a lesion that helps.
+
+**The constraint this exposes: the lesion study needs models that complete
+reliably when intact**, and the 2026-09-05 benchmark says only a handful do —
+1-3, 3-3 and 6-1 at 5/5, then 3-2 and 6-3 at 4/5, 5-2 at 3/5. Of those, exactly
+**one is imitation-trained (Level1-3)**, which is the very model the confound is
+about. So **recipe and level cannot be separated with the current model set**;
+it is not a matter of running more rollouts. Resolving it needs either a
+strong imitation-trained model on a level that also has a strong self-play
+one, or the lesion grid re-run under noisy (non-greedy) evaluation where weak
+models still show gradations. Left open deliberately.
+
+Also note **intact n=3 is too small for any of this** — it is the denominator
+every deficit is read against. Job 6382950 fixed that for the Level3-3 sweep
+(n=8); nothing else has.
 
 ### The simulation sweep answered #2, in the opposite direction to the guess
 
