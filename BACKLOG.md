@@ -650,9 +650,25 @@ assumed.
 cell. The intact row needs more rollouts before the sweep is publishable; it is
 the baseline every other row is read against.
 
-**In flight at the pause:** job **6380882** replicates the 50-sim grid across
-Level3-3 / Level6-1 / Level1-3 at 3 rollouts x 4 lesion seeds (369 rollouts).
-Results land in `outputs/lesion/lesion_eval-6380882.json`.
+**In flight at the pause (launched 2026-09-07):**
+- **6380882** — T10 replication of the 50-sim grid across Level3-3 / Level6-1 /
+  Level1-3, 3 rollouts x 4 lesion seeds (369 rollouts) →
+  `outputs/lesion/lesion_eval-6380882.json`.
+- **6382950** — T10 intact baseline, 8 rollouts at each of 10/25/50/100/200
+  simulations. This is next-action #6: the sweep's intact row was n=2 per cell
+  and is what every other row is read against.
+- **6382949** — T7 per-level read (next-action #5), both arms at `latest.pt`
+  (matched at 60.0M env steps) across all 12 curriculum levels with
+  `--compare-human` → `outputs/t7_per_level/<arm>/`. **Level2-2 is the control**:
+  zero human data, so if arm B wins there too the win is not from the demos.
+- **6382967-6382990** — T8 step 1 (next-action #4), the specialist teacher
+  corpus, **fanned out one job per level** across all 23 →
+  `outputs/specialist_trajectories/`, one `dump_report_<Level>.json` each.
+  Fanned out because cost is dominated by weak specialists: a level completing
+  at 0.03 burns its whole attempt budget for a handful of episodes, and 23 of
+  those in series would blow the wall. `--max-attempts-per-level 60` bounds it.
+  **These reports are the input to the teacher-quality-bar decision** — they say
+  which levels came up short, which is exactly what that decision needs.
 
 ## Comparison bundle — old models vs new (**built 2026-09-05**)
 

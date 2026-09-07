@@ -188,6 +188,10 @@ def main():
     ap.add_argument("--runs-dir", default="outputs/runs")
     ap.add_argument("--checkpoint", default="best.pt")
     ap.add_argument("--out", default="outputs/specialist_trajectories")
+    ap.add_argument("--report", default="dump_report.json",
+                    help="report filename inside --out. Give each job its own when "
+                         "fanning out per level, or they race: the .npz files are "
+                         "per-level and safe to share a directory, the report is not.")
     ap.add_argument("--episodes-per-level", type=int, default=40,
                     help="target KEPT episodes per level (completions, by default)")
     ap.add_argument("--max-attempts-per-level", type=int, default=200,
@@ -220,7 +224,7 @@ def main():
     report = dict(generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
                   git_sha=git_sha(), args=vars(args) | {"device": str(device)},
                   levels=records)
-    (out_dir / "dump_report.json").write_text(json.dumps(report, indent=1, default=str))
+    (out_dir / args.report).write_text(json.dumps(report, indent=1, default=str))
 
     hdr = f"{'level':10s}{'teacher':22s}{'kept':>6s}{'attempts':>10s}{'steps':>9s}"
     print("\n" + hdr); print("-" * len(hdr))
