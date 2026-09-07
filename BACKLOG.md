@@ -610,6 +610,51 @@ is that **neither curriculum arm can finish any level greedily**, and T7's
 this, but it was one trajectory per cell and remains unconfirmed — returns were
 not re-collected at n=5.
 
+## T11 — Why can't it reliably complete levels? (**opened 2026-09-07**)
+
+The project's oldest open question, reopened with better instruments. First
+useful move was to stop treating it as one problem: classifying the 2026-09-05
+benchmark's failing rollouts by **failure mode and spread of `final_x`** gives
+**three distinct signatures**, which almost certainly have different causes.
+
+| signature | levels | evidence |
+|---|---|---|
+| **hard deadlock** | **1-1** | 5/5 *stalled* (hit the 2000-step cap, never died), `final_x` spread of **16** (2354-2370) |
+| **clustered death** | 3-2, 6-3, 4-3 | all failures die at effectively one spot: spread **0**, **0**, 531 |
+| **scattered death** | 8-1, 8-2, 2-3 | die all over the level: spread **3786**, 3151, 2394 |
+
+"Stalled" vs "died" is the sharpest split — Level1-1 burns 2000 steps without
+dying, Level8-1 never times out at all. Any single explanation that covers both
+is probably wrong.
+
+**The standing hypothesis, and it now has independent support.**
+`diag_search_sharpness.py`'s header records that `mcts_visit_max_frac` sits at
+**0.23-0.27 for the whole run across all 12 T6 specialists** — the most-visited
+root action never takes much more than a quarter of the simulations. That visit
+distribution *is* the policy training target, so a permanently flat search
+trains a permanently flat policy head, and greedy eval then argmaxes a near-tie.
+**T10 independently made this worse**: the policy head is the load-bearing
+component (resetting its 1,266 parameters is catastrophic on all three replicated
+levels), so a weak policy head is exactly the thing greedy evaluation cannot
+survive. Flat search → flat target → weak policy → greedy failure is a coherent
+chain and every link is measurable.
+
+**Launched 2026-09-07:**
+- **6385358** — `diag_policy_collapse.py` on one level per signature plus a
+  control that completes 5/5: Level1-1 (deadlock), Level3-2 (clustered death),
+  Level8-1 (scattered death), Level6-1 (control). Separates "the head is
+  collapsed as a function" from "the head is merely confident" via
+  `argmax_switch_rate`, and asks whether search adds anything over the prior
+  (`visit_vs_prior_tv`). Its `--tail-window` makes the stall itself readable.
+- **6385359** — `diag_search_sharpness.py` on Level1-1 / Level6-1 / Level8-1,
+  sweeping `leaf_batch` (1, 4) x `sims` (32, 50, 200) against a fixed state
+  bank, to separate the two mechanical suspects for flat visits from a genuinely
+  flat head. New wrapper `scripts/submit_diag_sharpness.sh`.
+
+**The comparison that makes this readable is Level6-1**: same recipe, same
+budget, completes 5/5. Whatever the failing levels show has to *not* be true of
+it, or it is not the explanation.
+
 ## T10 — Lesion study (**machinery built + pilot run 2026-09-07**)
 
 Port of the Towers-of-Hanoi region-specific-planning experiment
