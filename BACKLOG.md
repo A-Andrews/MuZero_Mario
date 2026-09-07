@@ -31,6 +31,9 @@ are finished; nothing is mid-experiment.**
   23 checkpoints, **1123 MB**, manifest at sha e8a962b. Level5-3 is correctly
   marked `completed_level: false` / `latest.pt`.
 
+**A new thread opened 2026-09-07 (T10, lesion study)** — machinery built and a pilot run; see its section for the headline that the policy head's 1,266
+parameters matter more than the forward model's 7.0M.
+
 **Where to pick this up:** the numbered list below. Item 1 is the one that
 blocks someone else's work, not just ours.
 
@@ -541,6 +544,66 @@ when reading the results:
 Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
 policy dies at x=850, and 4-x are unattempted.
+
+## T10 — Lesion study (**machinery built + pilot run 2026-09-07**)
+
+Port of the Towers-of-Hanoi region-specific-planning experiment
+(`~/region-specific-planning/Muzero-Hanoi`) to Mario: re-initialise a targeted
+component of a trained net at evaluation time and measure the deficit.
+`src/muzero/lesion.py` keeps that study's three conventions unchanged so the two
+are comparable — lesion = random re-initialisation (not noise, not zeroing),
+evaluation-time only, and lesioning one target leaves every other parameter
+bit-identical (`tests/test_lesion.py`, 11 tests).
+
+**Mario needed a distinction Hanoi did not.** Hanoi's policy/value/reward heads
+are standalone Linear stacks off the latent; Mario puts policy and value behind
+a **shared residual trunk** (`prediction.blocks`) and the reward head inside
+`DynamicsNet`. So `policy` resets only the policy-specific conv/bn/fc — a
+careless `prediction`-wide reset would destroy value too and report a policy
+deficit that is really policy+value. Mario also gains two targets Hanoi has no
+analogue for: **`transition`** (the latent forward model MCTS rolls out) and
+**`encoder`**.
+
+**Pilot (job 6380549, Level3-3 `spec-level3-3` best.pt, 2 rollouts x 2 lesion
+seeds, greedy):**
+
+| Condition | completes | x median | params reset |
+|---|---|---|---|
+| intact | 1.0 | 2498 | 0 |
+| value | **1.0** | **2498** | 61,324 |
+| reward | **1.0** | **2498** | 87,425 |
+| value+reward | 0.5 | 2278 | 148,749 |
+| transition | 0.0 | 1063 | 6,996,096 |
+| policy+value | 0.0 | 440 | 62,590 |
+| pred_trunk | 0.0 | 419 | 664,320 |
+| policy+reward | 0.0 | 374 | 88,691 |
+| **policy** | **0.0** | **357** | **1,266** |
+| policy+value+reward | 0.0 | 256 | 150,015 |
+| encoder | 0.0 | 166 | 4,488,384 |
+
+**Three things worth following up, and the first is the headline:**
+
+1. **The deficit is not proportional to damage — it is almost inverse.**
+   Destroying the policy head's **1,266** parameters (0.006% of 22.6M) takes the
+   model from finishing the level to dying at x=357. Destroying the 7.0M-parameter
+   forward model still leaves it reaching x=1063, three times further. Whatever
+   this agent is doing, the policy prior is doing it.
+2. **Value and reward lesions are individually free** — 1.0 completion, identical
+   x, step counts within noise of intact (382-393 vs 387-391). That is the
+   *opposite* of the Hanoi phenotype, where the value lesion is the one that
+   produces the PFC-like deficit. The obvious hypothesis is that MCTS here is
+   prior-dominated: at 50 simulations over 12 actions the tree is shallow, so the
+   value head barely enters action selection. **The control that would settle it
+   is a `mcts.num_simulations` sweep** — if value only becomes load-bearing at
+   higher simulation counts, that is a statement about how much planning this
+   agent does, and it connects directly to the existing finding that these models
+   stall at fixed obstacles and lean on exploration noise.
+3. **`value+reward` together (0.5) is worse than either alone (1.0, 1.0)** —
+   a superadditive interaction worth confirming with more seeds.
+
+**Caveats on the pilot:** n=4 per lesioned condition (n=2 intact), one level, one
+checkpoint. Job **6380882** extends it to Level3-3 / Level6-1 / Level1-3 at 3
+rollouts x 4 lesion seeds. Read nothing as settled until that lands.
 
 ## Comparison bundle — old models vs new (**built 2026-09-05**)
 

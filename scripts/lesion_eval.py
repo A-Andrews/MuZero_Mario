@@ -187,8 +187,10 @@ def main() -> int:
             continue
         rate, run_dir, ckpt = picked
         print(f"[{level}] {run_dir.name} ({ckpt.name}, recorded rate {rate})", flush=True)
+        # Recorded as given, not resolved: outputs/ is a symlink to /projects,
+        # so resolving would produce a path outside the repo.
         meta.append(dict(level=level, run=run_dir.name,
-                         checkpoint=str(ckpt.relative_to(REPO)), recorded_rate=rate))
+                         checkpoint=str(ckpt), recorded_rate=rate))
         all_results += evaluate_level(
             level, ckpt, args.conditions, args.rollouts, args.lesion_seeds,
             args.max_steps, args.seed, args.device)
