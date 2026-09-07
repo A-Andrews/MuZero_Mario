@@ -89,7 +89,28 @@ def _repo_rel(p: Path) -> str:
     return str(p)
 
 
-def pick_run(level: str, runs_dir: Path, ckpt_name: str):
+def pick_run(level: str, runs_dir: Path, ckpt_name: str, force_run: str = None):
+    """When `force_run` is given, evaluate that run on `level` regardless of the
+    per-level convention — how a single multi-level model (a T7 curriculum arm)
+    is scored across every level it was trained on, with the same stochastic
+    starts and rollout count as the per-level fleet."""
+    if force_run:
+        d = runs_dir / force_run
+        ckpt = d / "checkpoints" / ckpt_name
+        if not ckpt.exists():
+            return None
+        meta = {}
+        side = d / "checkpoints" / "best.json"
+        if side.exists():
+            try:
+                meta = json.loads(side.read_text())
+            except ValueError:
+                pass
+        return (float(meta.get("completion_rate_100ep", -1.0)), d, ckpt, meta)
+    return _pick_run_by_level(level, runs_dir, ckpt_name)
+
+
+def _pick_run_by_level(level: str, runs_dir: Path, ckpt_name: str):
     """Best available run for `level`, ranked by its recorded peak completion rate.
 
     Several levels have both a T6 self-play run (`spec-<level>`) and a T7
@@ -135,8 +156,8 @@ def build_net(model_cfg, device):
 
 
 def evaluate_level(level, runs_dir, ckpt_name, n_rollouts, max_steps, device,
-                   deterministic, base_seed):
-    picked = pick_run(level, runs_dir, ckpt_name)
+                   deterministic, base_seed, force_run=None):
+    picked = pick_run(level, runs_dir, ckpt_name, force_run=force_run)
     if picked is None:
         print(f"[{level}] no run with checkpoints/{ckpt_name} — skipped", flush=True)
         return None
@@ -190,7 +211,11 @@ def evaluate_level(level, runs_dir, ckpt_name, n_rollouts, max_steps, device,
     done = [r["steps"] for r in rollouts if r["completed"]]
     return dict(
         level=level, run=run_dir.name, checkpoint=_repo_rel(ckpt_path),
-        training_step=meta.get("training_step"), env_step=meta.get("env_step"),
+        # From the checkpoint actually loaded, not from best.json: those agree
+        # only when --checkpoint is best.pt, and silently mislabel provenance
+        # otherwise (e.g. scoring a run's latest.pt).
+        training_step=state.get("training_step", meta.get("training_step")),
+        env_step=state.get("env_step", meta.get("env_step")),
         selfplay_rate_at_best=(rate if rate >= 0 else None),
         deterministic=deterministic, noop_max=noop_max, skip_to_control=skip,
         n_rollouts=n, n_completed=len(done),
@@ -303,6 +328,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--levels", nargs="*", default=ALL_LEVELS)
     ap.add_argument("--runs-dir", default="outputs/runs")
+    ap.add_argument("--run", default=None,
+                    help="evaluate this one run on every --levels entry, instead of "
+                         "the per-level spec-<level> convention. For scoring a single "
+                         "multi-level model (a T7 curriculum arm) across its levels.")
     ap.add_argument("--checkpoint", default="best.pt",
                     help="checkpoint file inside each run's checkpoints/ (default best.pt)")
     ap.add_argument("--rollouts", type=int, default=5, help="run-throughs per level")
@@ -323,7 +352,8 @@ def main():
           f"checkpoint={args.checkpoint}", flush=True)
 
     results = [evaluate_level(lv, runs_dir, args.checkpoint, args.rollouts,
-                              args.max_steps, device, args.deterministic, args.seed)
+                              args.max_steps, device, args.deterministic, args.seed,
+                              force_run=args.run)
                for lv in args.levels]
     ok = [r for r in results if r is not None]
     human = compute_level_stats(args.human_dir, [r["level"] for r in ok])
