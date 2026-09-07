@@ -280,6 +280,62 @@ Hydra config tree rooted at [conf/muzero.yaml](conf/muzero.yaml), with `env: mar
   the training start distribution.
 - `worker.torch_threads` / `learner_torch_threads` — kept at 1 to avoid oversubscription across the worker pool.
 
+### Lesion study (`src/muzero/lesion.py`, `scripts/lesion_eval.py`)
+
+Re-initialise a targeted component of a trained net at evaluation time and
+measure the performance deficit — the Mario counterpart of the Towers-of-Hanoi
+region-specific-planning experiment at
+`~/region-specific-planning/Muzero-Hanoi` (value → PFC, policy → cerebellar,
+compared against human lesion data). Three conventions are shared with that
+study and must not drift, or the two are no longer comparable:
+
+1. **A lesion is random re-initialisation**, not added noise and not zeroing.
+   Here each leaf module's own `reset_parameters()` is called, so a lesioned
+   Conv2d/Linear/BatchNorm2d gets exactly its constructor-time distribution.
+2. **Evaluation time only.** Never retrain after lesioning for a main result.
+3. **Lesioning one target leaves every other parameter bit-identical** —
+   `tests/test_lesion.py::TestLesionContract`, 11 tests.
+
+**The Mario-specific trap.** Hanoi's policy/value/reward heads are standalone
+`nn.Linear` stacks off the latent, so each is trivially separable. Mario's
+`PredictionNet` puts policy and value behind a **shared residual trunk**
+(`prediction.blocks`) and `DynamicsNet` carries the reward head. A "policy
+lesion" written as a `prediction`-wide reset therefore also destroys value and
+reports a policy deficit that is really policy+value. `LESION_TARGETS` resets
+only the head-specific conv/bn/fc; the trunk is separately lesionable as
+`pred_trunk`. Two targets have no Hanoi analogue: **`transition`** (`dynamics`
+minus its reward head — the latent forward model MCTS actually rolls out) and
+**`encoder`**. `projection_net` is deliberately not a target: it is a
+learner-only SimSiam head no inference path touches, so lesioning it is a
+guaranteed no-op that would read as a spurious "no deficit".
+
+`apply_lesion(net, targets, seed)` saves/seeds/restores the torch RNG, so a
+lesion is reproducible without shifting the stream rollout seeds come from.
+**A lesion is a random variable** — one re-init is one sample — so
+`--lesion-seeds` repeats each condition with independent re-inits and results
+should be read across seeds.
+
+`scripts/lesion_eval.py` (via `sbatch scripts/submit_lesion_eval.sh`) scores
+conditions by greedy run-throughs, reporting `final_x` alongside completion:
+completion is 0/1 and most lesions drive it to zero, whereas distance degrades
+gradually and separates a mild deficit from a total one. Every rollout rebuilds
+the net from the checkpoint, so lesions never stack. `--sims` sweeps
+`mcts.num_simulations`, which is how you ask whether a component is only
+load-bearing when the search is deep enough to consult it.
+
+**Findings so far (2026-09-07, Level3-3, jobs 6380549 / 6380994)** — see
+BACKLOG.md T10 for the tables:
+- **The deficit is close to inverse to the damage.** Resetting the policy
+  head's **1,266** parameters (0.006% of 22.6M) takes the model from finishing
+  to dying at x=357; resetting the **7.0M**-parameter forward model still
+  reaches x=1063.
+- **Deeper search amplifies a broken value head.** Value-lesioned completion
+  falls 1.00 → 0.50 as simulations go 10 → 200, while intact sits at ceiling
+  throughout. More planning is actively worse than less when the bootstrap is
+  corrupted.
+- **`reward` is free at every search depth** — the one component this agent
+  does not appear to use.
+
 ### Shipping models to collaborators (`package_models.py`)
 
 `sbatch scripts/submit_package_models.sh [args]` builds a self-contained zip a

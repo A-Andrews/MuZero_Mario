@@ -31,8 +31,11 @@ are finished; nothing is mid-experiment.**
   23 checkpoints, **1123 MB**, manifest at sha e8a962b. Level5-3 is correctly
   marked `completed_level: false` / `latest.pt`.
 
-**A new thread opened 2026-09-07 (T10, lesion study)** — machinery built and a pilot run; see its section for the headline that the policy head's 1,266
-parameters matter more than the forward model's 7.0M.
+**A new thread opened 2026-09-07 (T10, lesion study)** — machinery built, a
+pilot and a simulation sweep run. Two results: the policy head's **1,266**
+parameters matter more than the forward model's **7.0M**, and a broken value
+head gets *worse the more the agent searches* (1.00 -> 0.50 completion from
+10 to 200 simulations) while the intact model sits at ceiling throughout.
 
 **Where to pick this up:** the numbered list below. Item 1 is the one that
 blocks someone else's work, not just ours.
@@ -601,9 +604,50 @@ seeds, greedy):**
 3. **`value+reward` together (0.5) is worse than either alone (1.0, 1.0)** —
    a superadditive interaction worth confirming with more seeds.
 
-**Caveats on the pilot:** n=4 per lesioned condition (n=2 intact), one level, one
-checkpoint. Job **6380882** extends it to Level3-3 / Level6-1 / Level1-3 at 3
-rollouts x 4 lesion seeds. Read nothing as settled until that lands.
+### The simulation sweep answered #2, in the opposite direction to the guess
+
+Job **6380994** (Level3-3, 2 rollouts x 3 lesion seeds per cell). The guess was
+"value is free because search is shallow; deepen it and value will start to
+matter". The direction is right and the mechanism is the reverse of benign:
+
+| sims | intact | value | reward | transition x | policy x |
+|---|---|---|---|---|---|
+| 10 | 1.00 | **1.00** | 1.00 | 1463 | 375 |
+| 25 | 0.50* | **1.00** | 1.00 | 893 | 407 |
+| 50 | 1.00 | **0.83** | 1.00 | 884 | 356 |
+| 100 | 1.00 | **0.67** | 1.00 | 776 | 203 |
+| 200 | 1.00 | **0.50** (x 1641) | 1.00 | 636 | 208 |
+
+\* n=2 per intact cell; the 25-sim 0.50 is noise, not a dip.
+
+**Deeper search amplifies the damage from a broken value head.** Intact sits at
+ceiling at every simulation count — extra search buys the healthy model nothing
+— but the value-lesioned model falls from 1.00 to 0.50 as simulations go 10 ->
+200, and its `final_x` finally breaks off the ceiling at 200 (2498 -> 1641).
+With a randomly re-initialised value head, more planning is actively worse than
+less: the corrupted bootstrap gets propagated into the root by exactly the
+mechanism that is supposed to make search helpful. The same monotone
+degradation shows in `transition` (1463 -> 636), which is the other component
+the tree consults on every simulation.
+
+**`reward` is free at every depth** (1.00 across the sweep) — the one component
+this agent genuinely does not use. Worth a thought: Mario's shaped reward is
+dense, so the value head may already carry everything the reward head would say.
+
+**Read together with the pilot, the phenotype is:** policy = catastrophic and
+search-depth-independent; value = latent, and only expressed under deep search;
+reward = silent; transition = catastrophic and depth-amplified. That is a
+different phenotype from Hanoi's, where the value lesion is the headline deficit
+at the default search budget — and the difference is now *measured* rather than
+assumed.
+
+**Caveats:** one level, one checkpoint, n=6 per lesioned cell and n=2 per intact
+cell. The intact row needs more rollouts before the sweep is publishable; it is
+the baseline every other row is read against.
+
+**In flight at the pause:** job **6380882** replicates the 50-sim grid across
+Level3-3 / Level6-1 / Level1-3 at 3 rollouts x 4 lesion seeds (369 rollouts).
+Results land in `outputs/lesion/lesion_eval-6380882.json`.
 
 ## Comparison bundle — old models vs new (**built 2026-09-05**)
 
