@@ -371,8 +371,12 @@ README. Templates for the last two are `scripts/_bundle_{load_model.py,README.md
   resemble those subjects' brains. The bundle README flags them as a separate
   group; say it explicitly when sending.
 
-**Known gap, unfixed:** `outputs/human_trajectories/` cannot be aligned
-frame-accurately to the fMRI. Segments split at deaths, title-card/respawn
+**Known gap, unfixed — but it does not block the collaboration.** Confirmed
+2026-09-07 that the collaborator feeds their own stimulus frames, so they need
+`load_model.frames_to_obs()` (which reproduces this pipeline exactly) and not
+our corpus. The gap below is therefore an *internal* limitation, relevant only
+if we want TR-aligned analysis from the corpus ourselves:
+`outputs/human_trajectories/` cannot be aligned frame-accurately to the fMRI. Segments split at deaths, title-card/respawn
 frames are dropped, and no absolute .bk2 frame index is stored — only
 per-segment step counts in `conversion_report.json` — so cumulative agent steps
 do not map linearly onto the .bk2 timeline. Fixing it means emitting a
