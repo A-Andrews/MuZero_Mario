@@ -105,12 +105,11 @@ Next actions, in order:
    BC-pretrained on the same subjects' gameplay their fMRI comes from and are
    therefore confounded for any human-likeness claim — the manifest and README
    label them, but do not rely on that being read.
-3. **Consider shipping both T7 arms as a matched pair.** `curriculum-human` and
-   `curriculum-nohuman` are two single models playing all 12 of worlds 1-4,
-   identical in architecture/budget/recipe and differing only in whether they
-   saw human gameplay. That is a controlled contrast aimed straight at "does
-   human-derived training make representations more brain-like", which 23
-   specialists cannot answer. Both are weak players (0.11 / 0.02); say so.
+3. **Done 2026-09-05 — both T7 arms shipped** in
+   `exports/muzero_mario_comparison_20260905.zip`, as `latest.pt` at exactly
+   60.0M env steps each so they match on budget rather than on their individual
+   bests. See the comparison-bundle section below for the other two pairs and
+   the `imit-*` confound.
 4. **Run T8.** `scripts/dump_specialist_trajectories.py` then the imitation
    pipeline with the specialist corpus in place of the human one. Decide the
    **teacher-quality bar** first: the dumper filters to completing episodes, so
