@@ -127,7 +127,12 @@ Next actions, in order:
 5. **Read T7 per level.** The 0.11-vs-0.02 headline is pooled over 12 levels.
    Level2-2 has zero human data and is the natural control: if arm B beats arm A
    there too, the win is not coming from the demos.
-6. **Level5-3 is parked, deliberately.** 30M env steps across two recipes with
+6. **Finish T10.** Nearest-term: more `intact` rollouts per simulation count —
+   the sweep's baseline is n=2 per cell and every other row is read against it.
+   Then replicate the sweep on a second level (Level6-1 finishes 5/5 greedily,
+   so it can show the same ceiling), and consider whether `reward` being free at
+   every depth is a Mario artefact of dense shaped reward.
+7. **Level5-3 is parked, deliberately.** 30M env steps across two recipes with
    zero completions. Do not chase it again without a new idea about the wall at
    x~907 — the failure is a death, not a timeout, so it is the same pit-gap
    archetype as T6's 1-3/4-3 but one the imitation rescue did not crack.
