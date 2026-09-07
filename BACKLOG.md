@@ -110,22 +110,43 @@ Next actions, in order:
    60.0M env steps each so they match on budget rather than on their individual
    bests. See the comparison-bundle section below for the other two pairs and
    the `imit-*` confound.
-4. **Run T8.** `scripts/dump_specialist_trajectories.py` then the imitation
+4. **T8 step 1 is done (2026-09-07, jobs 6382967-6382990) — the
+   teacher-quality bar can now be decided from data, not guessed.** 21 of 23
+   levels reported (Level1-2 / Level5-3 still running), **355 episodes /
+   207,863 agent-steps** in `outputs/specialist_trajectories/`, at
+   `--max-attempts-per-level 60`:
+
+   | tier | levels | kept |
+   |---|---|---|
+   | at target | 1-1, 3-2, 6-1 | 40 each |
+   | strong | 3-3 (34), 1-3 (33), 4-1 (33), 5-1 (23), 6-3 (22), 7-1 (18), 3-1 (17) | 17-34 |
+   | thin | 2-1 (13), 8-2 (12), 2-2 (10), 2-3 (8), 5-2 (6), 7-3 (5), 4-2 (1) | 1-13 |
+   | **empty** | **4-3, 6-2, 8-1, 8-3** | **0** |
+
+   Four levels contribute nothing and three more contribute under 10 episodes,
+   so a 23-level distillation target cannot be met from this corpus as it
+   stands. Note **6-2 came out empty despite a 0.25 self-play rate** — worth a
+   look before assuming the bar is just "rate too low". Also note the whole
+   corpus is **207k agent-steps against the human corpus's 3.25M**, i.e. ~6%;
+   raising `--episodes-per-level` on the levels that can supply them is the
+   obvious next move.
+
+5. **Then run T8 proper.** The imitation
    pipeline with the specialist corpus in place of the human one. Decide the
    **teacher-quality bar** first: the dumper filters to completing episodes, so
    levels whose specialist rarely completes even with noise (4-3 0.01, 8-1 0.01,
    8-3 0.03, 4-2 0.14) will be thin or empty; the script reports which came up
    short. T7's result is the argument for doing this — a mixed teacher stream
    demonstrably works.
-5. **Read T7 per level.** The 0.11-vs-0.02 headline is pooled over 12 levels.
-   Level2-2 has zero human data and is the natural control: if arm B beats arm A
-   there too, the win is not coming from the demos.
-6. **Finish T10.** Nearest-term: more `intact` rollouts per simulation count —
+6. **Re-run the T7 per-level read with n>1.** Done once at n=1 (see its
+   section); the 8-of-12 return split and the Level2-2 control result both need
+   several stochastic-start rollouts per level before they can be relied on.
+7. **Finish T10.** Nearest-term: more `intact` rollouts per simulation count —
    the sweep's baseline is n=2 per cell and every other row is read against it.
    Then replicate the sweep on a second level (Level6-1 finishes 5/5 greedily,
    so it can show the same ceiling), and consider whether `reward` being free at
    every depth is a Mario artefact of dense shaped reward.
-7. **Level5-3 is parked, deliberately.** 30M env steps across two recipes with
+8. **Level5-3 is parked, deliberately.** 30M env steps across two recipes with
    zero completions. Do not chase it again without a new idea about the wall at
    x~907 — the failure is a death, not a timeout, so it is the same pit-gap
    archetype as T6's 1-3/4-3 but one the imitation rescue did not crack.
@@ -546,6 +567,45 @@ Success criterion: each specialist's own-level completion rate under the T1
 eval grid. Expect a wide spread — Level1-1 hit 0.84 while Level1-2's greedy
 policy dies at x=850, and 4-x are unattempted.
 
+## T7 per-level read (**done 2026-09-07, job 6382949**)
+
+The 0.11-vs-0.02 headline is a pooled self-play rate. Per level, greedily, at
+`latest.pt` for both arms (matched at 60.0M env steps):
+
+**Both arms complete 0 of 12 levels.** Not one greedy completion between them.
+Whatever the human arm's higher self-play rate is measuring, it does not survive
+the removal of exploration noise — the same gap the specialists show, and the
+reason the fleet's headline rates were never the deployed performance.
+
+By **return**, which does separate them, the human arm leads on **8 of 12**:
+
+| | human | nohuman | |
+|---|---|---|---|
+| 1-1 | **243.5** | 65.1 | human |
+| 1-2 | **46.1** | 12.9 | human |
+| 1-3 | **80.0** | 48.7 | human |
+| 2-1 | **82.1** | 37.1 | human |
+| **2-2** | 84.9 | **126.3** | **nohuman — the control** |
+| 2-3 | -19.3 | -20.3 | tie, both stuck |
+| 3-1 | 29.5 | **62.0** | nohuman |
+| 3-2 | **200.0** | 28.1 | human |
+| 3-3 | **65.7** | 38.0 | human |
+| 4-1 | 33.4 | **38.9** | nohuman |
+| 4-2 | 26.3 | 26.5 | tie |
+| 4-3 | **67.2** | 46.3 | human |
+
+**Level2-2 is the control and it behaves as a control should.** It is the one
+level with zero human data, and it is one of the levels where the no-human arm
+wins — the human arm has no advantage exactly where it had no demonstrations to
+learn from. That is the pattern you would want if the advantage is really coming
+from the demos rather than from a lucky seed.
+
+**Caveat, and it is a big one: n=1 per level.** `replay_checkpoint.py` runs a
+single deterministic greedy rollout per level, so every cell above is one
+trajectory. The 8-of-12 split and the control result are suggestive, not
+established. Re-run with several stochastic-start rollouts per level before
+putting any weight on it.
+
 ## T10 — Lesion study (**machinery built + pilot run 2026-09-07**)
 
 Port of the Towers-of-Hanoi region-specific-planning experiment
@@ -618,10 +678,17 @@ matter". The direction is right and the mechanism is the reverse of benign:
 
 \* n=2 per intact cell; the 25-sim 0.50 is noise, not a dip.
 
-**Deeper search amplifies the damage from a broken value head.** Intact sits at
-ceiling at every simulation count — extra search buys the healthy model nothing
+**Deeper search amplifies the damage from a broken value head.** Intact is
+**flat** across simulation counts — extra search buys the healthy model nothing
 — but the value-lesioned model falls from 1.00 to 0.50 as simulations go 10 ->
 200, and its `final_x` finally breaks off the ceiling at 200 (2498 -> 1641).
+
+**Correction (job 6382950, n=8 per intact cell, 2026-09-07):** the sweep table's
+intact row was n=2 and read as a clean 1.00 at every count. At n=8 it is
+**0.875 / 0.875 / 1.00 / 0.875 / 1.00** for 10 / 25 / 50 / 100 / 200 — flat, with
+no trend, but ~0.9 rather than a hard ceiling. The comparison survives intact
+(flat baseline against a monotonically declining value-lesion row) but "sits at
+ceiling" was an artefact of n=2 and should not be repeated.
 With a randomly re-initialised value head, more planning is actively worse than
 less: the corrupted bootstrap gets propagated into the root by exactly the
 mechanism that is supposed to make search helpful. The same monotone
