@@ -662,6 +662,37 @@ seeds, greedy):**
 3. **`value+reward` together (0.5) is worse than either alone (1.0, 1.0)** —
    a superadditive interaction worth confirming with more seeds.
 
+### Replication across 3 levels overturns the pilot's "value is free" (job 6380882)
+
+n=12 per lesioned condition, n=3 intact, 50 sims.
+
+| level | teacher | intact | value | reward | policy | transition |
+|---|---|---|---|---|---|---|
+| Level3-3 | self-play | 1.00 | **0.917** | 0.917 | 0.00 | 0.167 |
+| Level6-1 | self-play | 1.00 | **0.417** | 0.667 | 0.00 | 0.083 |
+| Level1-3 | **imitation** | 1.00 | **0.083** | 0.833 | 0.083 | 0.083 |
+
+**The pilot's headline was a single-level artefact.** "Value and reward lesions
+are individually free" is true on Level3-3 and false elsewhere: value falls to
+0.417 on Level6-1 and to **0.083** on Level1-3, where it is as damaging as the
+policy lesion (0.083) and drops `final_x` 2514 -> 1266. Reward is mild but not
+free either (0.667-0.917, where the pilot at n=4-6 read 1.00).
+
+**What survives:** the policy lesion is catastrophic on all three levels, and it
+is still only **1,266** parameters. Transition is catastrophic on all three
+(0.083-0.167) despite the model retaining an intact encoder and both heads.
+Encoder is 0.00 everywhere.
+
+**The confound to resolve before writing any of this up.** Level1-3 — the level
+where value matters most — is the **only imitation-trained model in the set**
+(`spec-imit-level1-3`); Level3-3 and Level6-1 are pure self-play. So
+"value-lesion severity varies by level" has a rival explanation, "varies by
+training recipe": a BC-pretrained model may lean on its value head differently.
+Jobs **6384697** (Level8-2, Level5-2 — imitation) and **6384698** (Level1-1,
+Level3-2 — self-play) add two models of each kind to separate these. Note the
+comparison is not competence-matched — no two models of different recipe have
+the same self-play rate — so read it as a direction, not a clean contrast.
+
 ### The simulation sweep answered #2, in the opposite direction to the guess
 
 Job **6380994** (Level3-3, 2 rollouts x 3 lesion seeds per cell). The guess was
@@ -699,9 +730,15 @@ the tree consults on every simulation.
 this agent genuinely does not use. Worth a thought: Mario's shaped reward is
 dense, so the value head may already carry everything the reward head would say.
 
-**Read together with the pilot, the phenotype is:** policy = catastrophic and
-search-depth-independent; value = latent, and only expressed under deep search;
-reward = silent; transition = catastrophic and depth-amplified. That is a
+**Read together with the pilot, the Level3-3 phenotype is:** policy =
+catastrophic and search-depth-independent; value = latent, and only expressed
+under deep search; reward = silent; transition = catastrophic and
+depth-amplified. **But the 3-level replication above shows this phenotype is
+Level3-3's, not the agent's** — value is far from silent on Level6-1 and
+Level1-3. The depth-dependence of the value lesion has only been measured on
+Level3-3; job **6383757** repeats the sweep on Level6-1, where value already
+costs 0.58 at the default 50 sims, so the depth effect there should be easier
+to see, not harder. That is a
 different phenotype from Hanoi's, where the value lesion is the headline deficit
 at the default search budget — and the difference is now *measured* rather than
 assumed.

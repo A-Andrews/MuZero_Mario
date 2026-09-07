@@ -329,12 +329,15 @@ BACKLOG.md T10 for the tables:
   head's **1,266** parameters (0.006% of 22.6M) takes the model from finishing
   to dying at x=357; resetting the **7.0M**-parameter forward model still
   reaches x=1063.
-- **Deeper search amplifies a broken value head.** Value-lesioned completion
-  falls 1.00 → 0.50 as simulations go 10 → 200, while intact sits at ceiling
-  throughout. More planning is actively worse than less when the bootstrap is
-  corrupted.
-- **`reward` is free at every search depth** — the one component this agent
-  does not appear to use.
+- **Deeper search amplifies a broken value head** — on Level3-3, value-lesioned
+  completion falls 1.00 → 0.50 as simulations go 10 → 200 while intact stays
+  flat (~0.9 at n=8). More planning is actively worse than less when the
+  bootstrap is corrupted.
+- **Do not generalise from one level.** The 3-level replication (job 6380882,
+  n=12) overturned the pilot's "value and reward lesions are free": value costs
+  0.08 on Level3-3 but **0.58 on Level6-1 and 0.92 on Level1-3**. The pilot's
+  phenotype was Level3-3's, not the agent's — and Level1-3 is also the only
+  imitation-trained model in that set, so recipe and level are confounded there.
 
 ### Shipping models to collaborators (`package_models.py`)
 
