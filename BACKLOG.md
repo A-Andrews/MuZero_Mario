@@ -100,11 +100,12 @@ Next actions, in order:
 
    Do not do the re-run before asking. It was ranked #1 here on the assumption
    they use our corpus, which was never established.
-2. **Send the bundle** at `/projects/u6oz/atdandrews/MuZero_Mario/exports/`.
-   Tell the recipient explicitly that the 5 `spec-imit-*` models were
-   BC-pretrained on the same subjects' gameplay their fMRI comes from and are
-   therefore confounded for any human-likeness claim — the manifest and README
-   label them, but do not rely on that being read.
+2. **Done 2026-09-07 — both bundles sent.**
+   `muzero_mario_models_20260905.zip` (23 levels, 1123 MB) and
+   `muzero_mario_comparison_20260905.zip` (8 models, three matched pairs,
+   396 MB), both from `/projects/u6oz/atdandrews/MuZero_Mario/exports/`.
+   Note `muzero_mario_models_20260828.zip` (the earlier 12-level bundle) is
+   also still out there, and its README predates `frames_to_obs`.
 3. **Done 2026-09-05 — both T7 arms shipped** in
    `exports/muzero_mario_comparison_20260905.zip`, as `latest.pt` at exactly
    60.0M env steps each so they match on budget rather than on their individual
