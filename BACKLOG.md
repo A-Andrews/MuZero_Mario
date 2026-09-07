@@ -651,6 +651,10 @@ chain and every link is measurable.
   bank, to separate the two mechanical suspects for flat visits from a genuinely
   flat head. New wrapper `scripts/submit_diag_sharpness.sh`.
 
+**A standalone brief for whoever picks this up is `docs/T11_BRIEF.md`** —
+the three signatures, the hypothesis, what is already established and must
+not be redone, and the rules (always run the Level6-1 control; check n).
+
 **The comparison that makes this readable is Level6-1**: same recipe, same
 budget, completes 5/5. Whatever the failing levels show has to *not* be true of
 it, or it is not the explanation.
