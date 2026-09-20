@@ -4,6 +4,254 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Setup
 
+2026-09-20 presentation/resumption handoff: start at `docs/handoff/START_HERE.md`.
+`STATUS.md` supersedes earlier pending-state prose: both leaf substitution and
+value-target audits are complete. Thirteen-slide HTML/PDF with notes, seven
+figures, six replay-verified clips, explicit next-experiment cards and access
+sign-off. Clean Python 3.11 plotting environment installed; 36 focused compute
+tests passed; corrected development-manifest model check 6723098 passed.
+See `REPRODUCE.md` for the earlier confirmation-seed guard failure, environment
+limits and measured runtime. No new training or broad evaluations.
+
+2026-09-20 search leaf-value outcomes COMPLETE and audited: all 1,120 branches,
+56 roots. Validation 6702349 and arrays 6702399/6702400 all 0:0. Final report
+6702401 failed because `decisions` diagnostic list was overwritten by rollout
+length; fixed live serializer to `search_decisions`, preserving frozen originals.
+Outcome audit 6721905 passed 14 tests and all trace checks; summary 6721916.
+See `docs/SEARCH_LEAF_VALUES_RESULTS_V1.md`. Eight-decision leaf substitution:
+6-1 pits 0/60→60/60 (three episodes, two roots each), references stay30/30;
+6-1 obstacle roots remain0/120 despite hold-8 rescuing late roots previously.
+1-1 pipes0/180→20/180 (90 deaths,70timeouts), 1-1 successful references70/70→40/70.
+Greedy and stall-sampled source groups separate. Metadata recovery replays only
+short prefixes using saved observation-value caches and checks against original
+traces: arrays6721917/6721926 and final summary6721927 all COMPLETE 0:0.
+All 56 roots recovered. Baseline 224,000 backups: depths1/2/3/4/5 =
+35449/83735/96520/8278/18; 80.5% depth2–3. All arms maxdepth5 and ZERO terminal
+backups, ruling out terminal-value replacement as the intervention mechanism.
+Root40 late6-1 obstacle firstaction4(right+run+jump)→1(right), still dies.
+Full gameplay outcomes were not rerun. No training or deployment changes.
+
+2026-09-20 reconstructed value-target audit validation SUBMITTED 6722600:
+`docs/VALUE_TARGET_AUDIT_V1.md`, `docs/value_targets_v1.json`, runner
+`scripts/diagnose_value_targets.py`; output
+`diagnostic_outputs/value-target-audit-v1b-20260920/` (shared home; Slurm compute).
+Initial freeze6722553 stopped on project file quota before tests; Lustre inodes
+100%. Partial project directory retained; no existing data removed.
+Preflight6722504 confirms n_step10/reanalyzeTrue/gamma.999/target refresh200 in
+both frozen checkpoints. Neither replay nor lagged target net was saved.
+Use current-online bootstrap as labelled proxy, NOT historical learner targets.
+Reuse56roots×5existingarms×10seeds=2800existing records, including successful
+1-1/6-1 controls; no new performance trials. Primary endpoint after eight
+prescribed actions, horizons1/10/50/100/200; terminal return separate from timeout
+finite tail. All replay/inference/tests on compute. Validation6722600 COMPLETE0:0 in2m05s:18
+tests and all seven replay smokes passed. Dependent arrays6722603(6-1),6722604(1-1),
+final CPUaudit6722606; afterok/kill-on-invalid-dep. Four concurrent GPUs max.
+
+
+2026-09-19 internship handoff: `docs/handoff/REPORT.md` consolidates scientific
+results and `docs/handoff/HANDOFF.md` maps code/data/resumption. Five figures in
+`images/handoff/` (PNG/PDF/SVG) are rendered by
+`scripts/plot_project_handoff.py` from portable, source-hashed
+`docs/handoff/evidence.json`; no new training or evaluations for this write-up.
+Active-scope development totals exclude 2-2: greedy 203/630, sampled 202/630;
+timeouts 90→0, deaths 337→428. Level5-3 remains human-covered but missing from
+this benchmark. The separate search-leaf v1b experiment below is in progress;
+the handoff makes no completed-result claim for it.
+
+2026-09-19 actual-search leaf-value diagnostic SUBMITTED:
+`docs/SEARCH_LEAF_VALUES_V1.md`; output
+`outputs/controller_policy/search-leaf-values-v1b-20260919/`.
+Preflight 6702295 passed 21 tests. Initial validation 6702313 failed safely on
+the reused worker's second reset (random-start generator advanced); full arrays
+6702318/6702319 and audit 6702329 auto-cancelled without running. Corrected v1b
+validation 6702349 restores original env RNG before every replay and adds a
+repeat-query regression test: all 22 tests passed and the first single-decision
+substitution smoke probe passed; remaining smoke validation still running.
+Corrected dependent arrays: 6702399 (6-1), 6702400 (1-1), two GPUs each; final
+CPU audit 6702401. Production source unchanged. Diagnostic
+Node.backup hook substitutes ONLY leaf values from exact emulator-path replay
+through the same frozen representation/value network. First 1 or 8 decisions,
+then normal search to the original cap; 1,120 new branches, 56 roots, ten paired
+seeds. Audit baseline first 16 decisions; shadow normal search on matched states
+checks exact output/RNG invariance. Complete replay in a separate CPU emulator
+process avoids incomplete snapshots. This is privileged diagnosis, not deployment
+or ground-truth value replacement. Root/child priors, predicted rewards, budget
+and checkpoints unchanged; terminal-valued paths explicitly recorded. Read
+protocol/status before interpreting or extending these experiments.
+
+2026-09-19 value / commitment follow-up COMPLETE: 1,680/1,680 new branches and
+56 value roots, arrays 6680517/6680518 and audit 6680519 all 0:0; evidence summary
+6702124. See `docs/VALUE_COMMITMENT_RESULTS_V1.md`. At late 6-1 obstacle roots,
+hold 8 rescues 60/60 across six source episodes; holds 1/2/4 complete 0/60.
+At earlier pit roots hold 2 rescues 30/30 (three episodes), but hold 8 kills
+10/10 at a successful reference. Pipe 1-1 deaths remain 0/180 for all holds
+(nine episodes, 18 roots): wrong initial action persists. Pipe imagined/observed
+value gap at h=8 is 77.8, reduced to 12.3 by one-step reanchoring. Real-observation
+values also mismatch specified continuation returns; no dynamics-only or BN
+causation claim. No new performance run or training launched during this review.
+Follow-up: actual searched paths/depths and observed-state leaf-value substitution
+with successful controls is now implemented/submitted as noted above.
+
+2026-09-18 value / commitment follow-up setup:
+`docs/VALUE_COMMITMENT_V1.md`, output `outputs/controller_policy/value-commitment-v1-20260918/`.
+Validation 6680504 COMPLETE 0:0 in 2m07s (18 focused tests and all six replay smoke roots passed),
+dependent 6-1 array 6680517 (roots 35–55), 1-1 array 6680518 (0–34), final CPU
+audit 6680519. Four simultaneous GPU tasks maximum across arrays. All 56 unique
+failure/reference roots from prior branches, 23 failed and five successful
+source episodes. Value decomposition at horizons 1–8 uses identical emulator
+prefixes plus imagined/observed/reanchored predictions and recorded returns.
+Hold the controller's own first selected action for 2/4/8 decisions; hold-1
+baseline reuses audited saved continuations with first-16-decision replay checks
+for every paired seed. 1,680 new full branches; ten conditional seeds per root,
+not independent level starts. No training, BatchNorm update, root noise or
+oracle-action choice. Greedy and stall-sampled source states stay separate.
+
+2026-09-18 combined slide: `images/action_policy_search/probabilities_all_levels_merged.png`
+(3840 × 2160; PDF/JSON companions), rendered by `scripts/plot_merged_policy_search.py`
+from the existing distribution summary, job 6671714. Equal weights across 21
+comparable levels, preserving within-level participant/episode weights; 5-3
+excluded from all three groups. Greedy and sampled panels remain separate.
+
+2026-09-18 requested human / policy-head / search action plots are COMPLETE:
+`images/action_policy_search/`, job 6671364 completed 0:0 with three tests and
+all trace/provenance checks passing. See `docs/ACTION_POLICY_SEARCH_DISTRIBUTIONS.md`.
+22 human-covered levels (five participants each); 21 model levels with all
+30 greedy and 30 sampled development episodes. 5-3 is explicitly human-only,
+2-2/7-2 absent. `probabilities_by_level.pdf` shows averaged policy softmax vs
+raw search visits on the SAME logged model states, human observed labels;
+greedy/sampled panels separate. `action_choices_by_level.pdf` instead shows
+hypothetical head argmax vs actually executed search actions; no policy-only
+rollout claim. `probabilities_overview.pdf` has two all-level heatmaps; CSV/JSON
+and per-level PNGs included. Equal human-participant/model-episode weighting,
+all outcomes, participant/episode bootstrap CIs. Do not infer matched-human-state
+accuracy or actual action frequencies from averaged soft probabilities.
+
+2026-09-18: failure branches are COMPLETE: 4,620/4,620, 47 cases, resumed arrays
+6607749/6607753 and final trace audit 6607758 all 0:0. See
+`docs/FAILURE_BRANCHES_RESULTS_V1.md`; read-only evidence summary 6668070.
+Nine 1-1 pipe-death episodes all avoid death with forced jumps, but seven then
+time out; two complete. Two later deaths complete with precisely timed release.
+6-1 confirms timing/sequence matters: six failure episodes' later jump prefixes
+complete 10/10 although continuation dies; earlier jumps still die later.
+At the later 6-1 root the first unforced action already matches the successful
+held action, excluding first-argmax/tie failure as a universal explanation.
+Some successful references are harmed by the same interventions. Direct fresh
+greedy/gated branches before the lost-success trigger both complete 10/10;
+the rare original loss is not reproduced there. Later logged sampled prefixes
+can reproduce deaths while alternatives succeed. Imagined values disagree with
+actual endpoint values at pipe roots, but no individual network/BN cause is
+isolated. Five unique successful reference episodes, ten unique reference roots;
+branch counts do not represent independent source episodes. No new controller
+or training experiment submitted in this review.
+
+Latest review: the failure-branch array stopped at the shared project file-count
+quota. Cases 0–4 completed; all later tasks failed and the audit was cancelled.
+Preflight 6607690 verified 567 saved branches and confirmed write access; resumed
+arrays 6607749 (6-1 cases 28–31 first) and 6607753 (other unfinished cases) use
+the SAME frozen source/plan/seeds. Audit 6607758 follows both. See
+`docs/FAILURE_BRANCHES_INTERIM.md`; no completed 6-1 controls or final diagnosis
+were available at this review. Preliminary jump prefixes avoid early pipe
+deaths but still time out; one post-rescue death is rescued by alternate prefixes.
+
+User scope change: exclude levels without human data. Corpus lacks 2-2 and 7-2;
+5-3 DOES have 422 segments and remains eligible. Default curriculum/fleet now
+11 levels; human comparison tools use corpus-based filtering; future coverage
+template is `docs/controller_coverage_human_v1.json`. Job 6607698 passed 13 tests
+and regenerated both updated all-level figures with 21 rows. See
+`docs/HUMAN_LEVEL_SCOPE.md`. Preserve historical checkpoints and frozen manifests.
+
+2026-09-16: authorized failure-state action branches are submitted; see
+`docs/FAILURE_BRANCHES_V1.md`. All 23 remaining deaths on 1-1/6-1, successful
+references, and a separate greedy/gated comparison before the lost-success
+trigger. Five arms × ten fixed seeds × two roots for failures/references;
+4,620 conditional branches planned with maximum four concurrent GPUs.
+Initial smoke 6602385 completed, but images exposed delayed pit-death signals;
+no full array used that selection. Revised validation 6602469 adds verified
+vertical-RAM replay to anchor before falls; completed 0:0 with 17 tests and
+32 smoke branches passing, plus seven full source replays and vertical replay
+for all 23 failures. Full array 6602494 (0–46, concurrency four) and dependent
+CPU aggregation/audit 6602502 are submitted. Revised output is
+`outputs/controller_policy/failure-branches-v1b-20260916/`. Preserve the frozen
+v1 setup as superseded provenance. Five successful reference episodes are reused
+across matched comparisons; do not inflate independent n. No model training/search
+changes are included. Full branch results are not yet available at submission.
+
+Independent stall-controller confirmation is complete: see results in
+`docs/STALL_SAMPLING_CONFIRMATION_RESULTS_V1.md` and protocol in
+`docs/STALL_SAMPLING_CONFIRMATION_V1.md`. Same candidate, all three arms and
+levels 1-1/6-1/1-3, 100 newly reserved pairs per arm/level, 900 episodes.
+Validation 6469923 freezes source/checkpoints and checks old-seed replay;
+full jobs 6469925/6469926/6469927 depend on its success, audit 6469932 on all
+three full jobs. Output `outputs/controller_policy/stall-sampling-confirmation-v1-20260911/`.
+All five jobs completed 0:0, all 900 episodes finished without infrastructure
+errors, and all 300 paired prefixes matched. Greedy / sampled / gated counts
+out of 100: 1-1 11/83/86; 6-1 84/80/91; 1-3 100/55/100. Gated rescues 76/78
+1-1 timeouts but loses ONE greedy success; the two other timeouts become deaths.
+Both controls preserve every greedy success; all seven 6-1 timeouts are rescued.
+Early deaths persist unchanged before triggers. No weights or policy training
+changed. Seeds 5100001/6100001 are now consumed; no further job submitted at review.
+
+Completed next experiment: `docs/STALL_SAMPLING_V1.md`, authorized after the completed
+controller investigation. Frozen candidate uses 96-decision x span ≤16 pixels
+to trigger 32 decisions of sampling at T=.25, then returns to greedy and resets
+the window. Uses RAM x/player-state outside the visual network; label that extra
+controller input. Three arms × 30 development trials on 1-1/6-1/1-3, 270 episodes.
+Validation 6464069 passed 21 tests and smoke checks; full jobs
+6464076/6464077/6464078 completed all 270 episodes. See
+`docs/STALL_SAMPLING_RESULTS_V1.md`: greedy / always-sampled / gated completions
+are 4/28/23 of 30 on 1-1, 28/19/29 on 6-1, and 30/17/30 on 1-3. Gated rescues
+all 20 greedy timeouts across the three levels and loses no greedy successes.
+Remaining deaths occur before any trigger, matching greedy. Audit 6468028 checked
+all trace hashes and exact pre-trigger equality. New confirmation ranges
+5100001/6100001 (100 pairs) were reserved at that audit and are now submitted
+for the independent confirmation above. The completed 30-trial results use
+reused development seeds; independent confirmation is still needed.
+
+Latest completed investigation audit: `docs/CONTROLLER_INVESTIGATION_RESULTS_20260911.md`.
+All confirmation, stall-pulse, coverage-array and figure jobs below completed 0:0.
+Reserved confirmation: 1-1 greedy 10/100 vs sampled 79/100; 6-1 90/100 vs 68/100.
+All-22 development totals: greedy 203/660 vs sampled 205/660; timeouts 98→2,
+deaths 359→453. Sampling is not a universal improvement. Earlier 1-1 staircase
+roots: 17 plain-right loops, prior prefers right+jump in 15/17; right+jump pulse
+escapes 9/17 versus 0/17 reference. Two late held-jump loops escape with release
+(2/2, exploratory). Local escape is not level completion. The reserved 100 seed
+pairs have now been consumed; a new tuned controller needs new untouched seeds.
+
+2026-09-11 policy follow-up: see `docs/POLICY_FOLLOWUP_V1.md` for the frozen
+100-pair controller confirmation on 1-1/6-1, root/recurrent policy gradient
+diagnostic, and all-participant human/model action figures on four levels.
+Keep confirmation separate from development and read actual job status before
+claiming completion. No production training or normalization change is proposed.
+Validation 6457936 and gradient jobs 6457939/6457940 succeeded; confirmation
+6457937/6457938 was running at the latest audit. See
+`docs/POLICY_GRADIENT_RESULTS_V1.md`: on fresh data, imagined policy gradients
+do not overwhelm the 1-1 head (median recurrent/root .812 greedy, .924 sampled;
+control 1.219/1.142). This excludes other training losses/history and does not
+establish BatchNorm causation. Human/model figures and caveats are documented in
+`docs/HUMAN_MODEL_ACTION_DISTRIBUTIONS_V1.md`.
+Updated performance figures: `images/human_vs_agent_runthrough_updated_development`
+and `_updated_all_levels` (PDF/PNG/JSON), generated from completed evaluations
+with separate successful-time and all-attempt completion panels. Job 6458425
+queues `_updated_confirmation` after 6457937/6457938 succeed; it retains labeled
+development data for 3-2/8-1. Original figures are preserved; see `images/README.md`.
+Local stall interventions: `docs/STALL_PULSES_V1.md`, output
+`outputs/controller_policy/stall-pulses-v1-20260911/`. Validation 6459314 passed
+four tests and all ten smoke branches; full jobs 6459327/6459328 were submitted
+after it. All 19 original 1-1 greedy timeouts qualify; paired 6-1 intact cohort
+completed 17/19. Five fixed eight-decision prefixes then greedy MCTS, 128-decision
+local horizon. These are local rescue measurements, not full-level performance;
+confirmation seeds are untouched. Check full job status before interpreting.
+Remaining-level stochastic evaluation: `docs/CONTROLLER_COVERAGE_V1.md`. The user
+requested every remaining benchmark level; array 6459440 schedules 18 levels,
+30 greedy + 30 sampled trials each, concurrency 4, after validation 6459439.
+Reuses original 6-1 control n=30 after exact trace replay checks. Figure 6459441
+will combine these with the original four completed development levels. Output
+`outputs/controller_policy/coverage-v1-20260911/`; all best checkpoints/source
+frozen on compute. Level5-3 lacks best.pt and is outside original 22-level scope.
+Coverage validation 6459439 completed: 16 tests, both controllers on 6-1/1-3,
+and bit-exact 6-1 control trace reproduction all passed. Full array results
+remain pending; do not interpret single smoke outcomes as controller rates.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -514,5 +762,25 @@ and falls back to a plain `wandb.log` on encoder failure, flagging
 exercises and logs the full metric path.
 
 ## Reference
+
+### Controller/policy diagnostic follow-up (2026-09-07)
+
+The completed results audit (2026-09-11) is
+[docs/CONTROLLER_POLICY_RESULTS_V1.md](docs/CONTROLLER_POLICY_RESULTS_V1.md).
+All 600 trials and probes completed. Sampling-only rescues Level1-1 (4/30 to
+28/30) but harms Level6-1 (28/30 to 19/30); sequential greedy also harms the
+control (12/30). The head matches fresh batched targets and carries state
+information. Neither BatchNorm causation nor gradient dominance is established.
+The reserved 100-trial confirmation set remains unused.
+
+See [docs/CONTROLLER_POLICY_DIAGNOSTIC.md](docs/CONTROLLER_POLICY_DIAGNOSTIC.md)
+and its predeclared JSON trial manifest. These new scripts investigate frozen
+controllers and policy/search target agreement without modifying training/MCTS.
+The user accepts seeded sampling if every predeclared attempt counts and final
+confirmation seeds are separate from settings selection. Always retain Level6-1.
+Original replay is not checkpointed: fresh evaluation targets must not be called
+historical training targets. Existing T11 descriptions of Level3-2/6-3 clustering
+each rest on only one failure among five trials, and Level8-1 is weak under both
+tested protocols. Greedy MCTS still has random internal UCB tie breaking.
 
 Structural reference (pattern source, not a dependency): `/well/costa/users/zqa082/Muzero-Hanoi`.

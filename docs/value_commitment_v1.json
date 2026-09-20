@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment_id": "value-commitment-v1-20260918",
+  "branch_experiment": "/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/failure-branches-v1b-20260916",
+  "branch_file_sha256": {
+    "manifest.json": "8d58780e3bdf3a5cee10c33eb2a1f0d28b4d29a9e21f82b16082e5b5a4750d3c",
+    "branch_plan.json": "719730c4ebaee3915bde5364ee35e29b6e759e77bd3b1b44b9d7d3b87ecea863",
+    "summary.json": "89864e9efb36a7f655165485a3aee607c05f8ddbdef1ab40abfb7ab10894d8ee"
+  },
+  "max_steps": 2000,
+  "num_simulations": 50,
+  "leaf_batch": 4,
+  "root_exploration_eps": 0.0,
+  "local_horizon": 128,
+  "prefix_decisions": 8,
+  "hold_decisions": [1, 2, 4, 8],
+  "branch_seeds": [7100001, 7100002, 7100003, 7100004, 7100005, 7100006, 7100007, 7100008, 7100009, 7100010],
+  "value_arms": ["logged_prefix", "release", "right_jump", "right_run_jump"],
+  "baseline_replay_decisions": 16,
+  "levels": {
+    "Level1-1": {
+      "checkpoint": "/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/checkpoints/Level1-1.pt",
+      "expected_checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49"
+    },
+    "Level6-1": {
+      "checkpoint": "/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/checkpoints/Level6-1.pt",
+      "expected_checkpoint_sha256": "338c80a50423d4e4f49e6e4fb054597d05cc855e0e14d49fefca9154e5ed2bbc"
+    }
+  }
+}

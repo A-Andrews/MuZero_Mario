@@ -1,5 +1,17 @@
 # T11 brief: why the agents don't reliably complete levels
 
+**Completed follow-up:** [CONTROLLER_POLICY_RESULTS_V1.md](CONTROLLER_POLICY_RESULTS_V1.md)
+reports the fixed-30-trial controller comparison and full policy probes.
+Sampling-only raises 1-1 from 4/30 to 28/30 but lowers the 6-1 control from
+28/30 to 19/30. All tested 8-1 controllers remain 0/30. The policy head tracks
+current search targets and uses state information; BatchNorm causation and
+gradient dominance are not established.
+
+**2026-09-07 follow-up:** several claims below are superseded by the completed
+diagnostic audit. Read [CONTROLLER_POLICY_DIAGNOSTIC.md](CONTROLLER_POLICY_DIAGNOSTIC.md)
+before interpreting the original brief: 3-2/6-3 each had only one greedy failure,
+8-1 also fails noisily, and flat visits occur on the successful 6-1 control.
+
 Instructions for an agent picking this up. Read this, then BACKLOG.md's T11 and
 T10 sections. Don't re-derive what's below.
 

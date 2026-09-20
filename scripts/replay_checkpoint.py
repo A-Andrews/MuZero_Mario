@@ -134,6 +134,15 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     levels = args.levels or cfg["env"]["levels"]
+    if args.compare_human:
+        from scripts.human_level_scope import human_levels
+        available = set(human_levels(args.human_dir))
+        excluded = [level for level in levels if level not in available]
+        levels = [level for level in levels if level in available]
+        if excluded:
+            print(f"[scope] Excluding levels without human gameplay: {excluded}")
+        if not levels:
+            ap.error("No requested levels have human gameplay")
     pad_to = int(cfg["model"]["input_spatial"]) if cfg["env"]["pad_to_input_spatial"] else None
     frame_skip = int(cfg["env"]["frame_skip"])
     video_fps = max(1, 60 // frame_skip)

@@ -31,8 +31,8 @@
 #   bash scripts/submit_specialist.sh <LEVEL> [N_LEGS] [extra overrides...]
 #   bash scripts/submit_specialist.sh Level1-1 2
 #
-# The whole T6 fleet (12 levels in parallel; the QOS allows 256 jobs):
-#   for L in Level1-1 Level1-2 Level1-3 Level2-1 Level2-2 Level2-3 \
+# The default human-covered fleet (11 levels in parallel):
+#   for L in Level1-1 Level1-2 Level1-3 Level2-1 Level2-3 \
 #            Level3-1 Level3-2 Level3-3 Level4-1 Level4-2 Level4-3; do
 #       bash scripts/submit_specialist.sh "$L" 2
 #   done
@@ -47,12 +47,14 @@ LEVEL="${1:?Usage: submit_specialist.sh <LEVEL> [N_LEGS] [overrides...]}"
 N_LEGS="${2:-2}"
 shift $(( $# >= 2 ? 2 : $# ))
 
-# Valid levels are whatever state files the integration actually ships,
-# so worlds 5-8 work without editing this list again.
-VALID=($(ls mario.stimuli/SuperMarioBros-Nes/Level*.state 2>/dev/null \
-        | sed 's|.*/||; s|\.state$||'))
+# Active specialists must have human gameplay for downstream analysis.
+mapfile -t VALID < <(python3 "$(dirname "$0")/human_level_scope.py")
 if [ "${#VALID[@]}" -eq 0 ]; then
-    echo "error: no .state files under mario.stimuli/SuperMarioBros-Nes/" >&2
+    echo "error: no converted human levels found" >&2
+    exit 1
+fi
+if [ ! -f "mario.stimuli/SuperMarioBros-Nes/${LEVEL}.state" ]; then
+    echo "error: integration state missing for ${LEVEL}" >&2
     exit 1
 fi
 ok=0

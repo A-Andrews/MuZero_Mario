@@ -35,6 +35,7 @@ export WANDB_DIR="${SLURM_SUBMIT_DIR}/wandb_runs"
 mkdir -p "${SLURM_SUBMIT_DIR}/logs" "${SLURM_SUBMIT_DIR}/wandb_runs"
 
 cd "${SLURM_SUBMIT_DIR}"
+python scripts/human_level_scope.py --require-level "$LEVEL"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "Git: branch=${GIT_BRANCH} sha=${GIT_SHA}"

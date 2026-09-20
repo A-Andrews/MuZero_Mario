@@ -9,6 +9,7 @@ venv/
 
 # Outputs
 outputs
+/diagnostic_outputs/
 # Anchored: a bare `logs/` also matched src/logs/, which silently kept the
 # logging package out of git and lost it in the BMRC -> Isambard migration.
 /logs/
@@ -33,3 +34,8 @@ mario.stimuli
 .DS_Store
 core
 core.*
+
+# Local handoff archives (source and presentation have their own manifests)
+/handoff_release/
+
+images/

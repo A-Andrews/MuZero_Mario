@@ -31,7 +31,7 @@ echo "Host: $(hostname)  Started: $(date)  Job: ${SLURM_JOB_ID:-<interactive>}"
 MARIO_ROOT="${MARIO_ROOT:-$HOME/data/mario}"
 INT_PATH="$REPO/mario.stimuli"
 OUT="$REPO/analysis/comparison/human_attempts.csv"
-LEVELS="Level1-1,Level1-2,Level1-3,Level2-1,Level2-2,Level2-3,Level3-1,Level3-2,Level3-3,Level4-1,Level4-2,Level4-3"
+LEVELS="Level1-1,Level1-2,Level1-3,Level2-1,Level2-3,Level3-1,Level3-2,Level3-3,Level4-1,Level4-2,Level4-3"
 CA="$REPO/.venv/lib/python3.11/site-packages/certifi/cacert.pem"
 
 # Requires datalad + git-annex on PATH (see fetch_human_data.sh header).

@@ -7,6 +7,8 @@
 # comparison on. **Level2-2 is the control**: it is the one level with zero
 # human data, so if arm B beats arm A there too, the win is not coming from
 # the demonstrations.
+# Historical T7 design above. Current --compare-human replay excludes levels
+# absent from the corpus, including 2-2, per the updated project scope.
 #
 #   sbatch scripts/submit_t7_per_level.sh
 #

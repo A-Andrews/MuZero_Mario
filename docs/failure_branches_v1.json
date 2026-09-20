@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "experiment_id": "failure-branches-v1b-20260916",
+  "source_experiment": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911",
+  "source_manifest_sha256": "5008c567ffd7a5726b4c1cb56367f8e614936589677d9c5351db90fe043a82e0",
+  "max_steps": 2000,
+  "num_simulations": 50,
+  "leaf_batch": 4,
+  "root_exploration_eps": 0.0,
+  "stall_controller": {
+    "burst_decisions": 32,
+    "max_x_span": 16,
+    "normal_player_state": 8,
+    "sampling_temperature": 0.25,
+    "window_decisions": 96
+  },
+  "offsets_before_death_onset": [
+    32,
+    16
+  ],
+  "prefix_decisions": 8,
+  "local_horizon": 128,
+  "branch_seeds": [
+    7100001,
+    7100002,
+    7100003,
+    7100004,
+    7100005,
+    7100006,
+    7100007,
+    7100008,
+    7100009,
+    7100010
+  ],
+  "arms": [
+    "continue",
+    "logged_prefix",
+    "release",
+    "right_jump",
+    "right_run_jump"
+  ],
+  "expected_failures": {
+    "Level1-1": 14,
+    "Level6-1": 9
+  },
+  "levels": {
+    "Level1-1": {
+      "checkpoint": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/checkpoints/Level1-1.pt",
+      "expected_checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49"
+    },
+    "Level6-1": {
+      "checkpoint": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/checkpoints/Level6-1.pt",
+      "expected_checkpoint_sha256": "338c80a50423d4e4f49e6e4fb054597d05cc855e0e14d49fefca9154e5ed2bbc"
+    }
+  },
+  "failure_onset": {
+    "death_player_state": 11,
+    "absolute_y_below_playfield": 480,
+    "include_life_decrement": true
+  },
+  "supersedes": "failure-branches-v1-20260916: smoke images revealed pit falls precede the recorded death state; full branches were not submitted."
+}

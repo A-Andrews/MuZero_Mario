@@ -1,0 +1,14 @@
+{
+  "experiment_id": "stall-pulses-v1-20260911",
+  "purpose": "Local causal action interventions on Level1-1 stalls with Level6-1 control; development data only",
+  "levels": {
+    "Level1-1": {
+      "checkpoint": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/v1b-20260907/checkpoints/Level1-1.pt",
+      "expected_checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49"
+    },
+    "Level6-1": {
+      "checkpoint": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/v1b-20260907/checkpoints/Level6-1.pt",
+      "expected_checkpoint_sha256": "338c80a50423d4e4f49e6e4fb054597d05cc855e0e14d49fefca9154e5ed2bbc"
+    }
+  }
+}

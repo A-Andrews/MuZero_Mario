@@ -46,6 +46,7 @@ from src.checkpoint import load_checkpoint
 from src.muzero.human_baseline import compute_level_stats
 from src.muzero.networks import MuZeroNet
 from src.selfplay.replay_eval import run_replay_rollout
+from scripts.human_level_scope import human_levels
 
 def discover_levels(runs_dir="outputs/runs") -> list:
     """Every level with at least one trained specialist run, world-stage ordered.
@@ -326,7 +327,7 @@ def make_figure(results, human, out_pdf: Path, meta: dict):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--levels", nargs="*", default=ALL_LEVELS)
+    ap.add_argument("--levels", nargs="*", default=None)
     ap.add_argument("--runs-dir", default="outputs/runs")
     ap.add_argument("--run", default=None,
                     help="evaluate this one run on every --levels entry, instead of "
@@ -344,6 +345,14 @@ def main():
     ap.add_argument("--human-dir", default="outputs/human_trajectories")
     ap.add_argument("--name", default="human_vs_agent_runthrough")
     args = ap.parse_args()
+    available = set(human_levels(args.human_dir))
+    requested = discover_levels(args.runs_dir) if args.levels is None else args.levels
+    excluded = [level for level in requested if level not in available]
+    args.levels = [level for level in requested if level in available]
+    if excluded:
+        print(f"[scope] Excluding levels without human gameplay: {excluded}", flush=True)
+    if not args.levels:
+        ap.error("No requested levels have human gameplay")
 
     device = torch.device(args.device)
     runs_dir = Path(args.runs_dir)
@@ -365,7 +374,7 @@ def main():
     footer = (
         f"Agent: {args.checkpoint} of each level's highest-scoring specialist run; {mode}; "
         f"greedy action selection, no root noise. Human: successful run-throughs from the converted "
-        f"CNeuroMod corpus, same frame-skip. Levels humans never played show no orange band. "
+        f"CNeuroMod corpus, same frame-skip. Only levels with human gameplay are included. "
         f"Not a like-for-like rate comparison — a few rollouts from a hand-picked checkpoint "
         f"against every recorded human attempt. Generated {stamp} · git {sha}"
     )

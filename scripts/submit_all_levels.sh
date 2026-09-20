@@ -13,7 +13,6 @@ LEVELS=(
     Level1-2
     Level1-3
     Level2-1
-    Level2-2
     Level2-3
     Level3-1
     Level3-2

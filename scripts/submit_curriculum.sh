@@ -1,5 +1,5 @@
 #!/bin/bash
-# Full 12-level autocurriculum run with the recipe validated on
+# Human-covered 11-level default autocurriculum run with the recipe validated on
 # level1-1-diag-v1 (0 -> 0.84 completion) and level1-2-diag-v1 (2026-07):
 #
 #   - discount 0.999 + completion_bonus 200: the completion signal actually
@@ -23,7 +23,7 @@
 #     want exploration mastered ones don't) — revisit per-level temperature
 #     if stragglers stall.
 #
-# env.levels / autocurriculum.enabled come from conf defaults (all 12, on).
+# env.levels / autocurriculum.enabled come from conf defaults (11 human-covered levels, on).
 # best.pt + best.json track the pooled rolling completion rate.
 #
 # Usage:

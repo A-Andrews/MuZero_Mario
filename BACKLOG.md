@@ -612,6 +612,10 @@ not re-collected at n=5.
 
 ## T11 — Why can't it reliably complete levels? (**opened 2026-09-07**)
 
+**Follow-up:** completed-audit corrections and the new predeclared controller /
+policy investigation are in [docs/CONTROLLER_POLICY_DIAGNOSTIC.md](docs/CONTROLLER_POLICY_DIAGNOSTIC.md).
+Read that before treating the original signatures and causal claims below as established.
+
 The project's oldest open question, reopened with better instruments. First
 useful move was to stop treating it as one problem: classifying the 2026-09-05
 benchmark's failing rollouts by **failure mode and spread of `final_x`** gives
