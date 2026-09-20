@@ -1,0 +1,125 @@
+{
+  "selection": "Smallest episode index satisfying each labelled category in the 100-trial confirmation; control is episode 0. Clips illustrate selected outcomes and do not estimate rates.",
+  "records": [
+    {
+      "category": "stall_rescue",
+      "level": "Level1-1",
+      "arm": "greedy",
+      "episode_index": 0,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/greedy/episode_0000.json",
+      "source_sha256": "ecb16d6b3b5d2f5f415d89e0ce3bfdd7248c01cde3ee4d3d83640ddfd34fc077",
+      "trace_sha256": "077fd028560b5832e35495ad261d26421bbca0aefdbd5e1970e55e84bfaa0400",
+      "checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49",
+      "full_steps_verified": 2000,
+      "shown_decisions": [
+        402,
+        702
+      ],
+      "completed": false,
+      "died": false,
+      "timed_out": true,
+      "video": "stall_rescue_greedy.mp4",
+      "video_sha256": "408bc6de8f65ef34d102fcf2a2d58ab6651d1a69093687ca0ff8fb3207939d64"
+    },
+    {
+      "category": "stall_rescue",
+      "level": "Level1-1",
+      "arm": "stall_sampled",
+      "episode_index": 0,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/stall_sampled/episode_0000.json",
+      "source_sha256": "13c13baf3bf600fd4f1db2cc2da1ac10f2540cf9cde7e91f6416ae80ece553e6",
+      "trace_sha256": "d42eedde4d831aa5deeb5f3ffbbce721714bce60fec48cab8b241ee695800478",
+      "checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49",
+      "full_steps_verified": 889,
+      "shown_decisions": [
+        402,
+        702
+      ],
+      "completed": true,
+      "died": false,
+      "timed_out": false,
+      "video": "stall_rescue_stall_sampled.mp4",
+      "video_sha256": "2069c8541a993ec8e14997c25bcb6039466bd30b1c99b45918ebdf242ede4a8c"
+    },
+    {
+      "category": "lost_success",
+      "level": "Level1-1",
+      "arm": "greedy",
+      "episode_index": 45,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/greedy/episode_0045.json",
+      "source_sha256": "e123895bf96c6dce5347de096c1f4f5d59fb4f71daf36501b0c3a81f8af425aa",
+      "trace_sha256": "a1137ef7726b6f8f3ba6b1d85bf19efe36690470885f317b84e6ab57889c33bc",
+      "checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49",
+      "full_steps_verified": 1269,
+      "shown_decisions": [
+        334,
+        634
+      ],
+      "completed": true,
+      "died": false,
+      "timed_out": false,
+      "video": "lost_success_greedy.mp4",
+      "video_sha256": "6f7e22995126244712b0bbcfcdf6f8eb30d35a9193c8ac9d41a87709893feaf5"
+    },
+    {
+      "category": "lost_success",
+      "level": "Level1-1",
+      "arm": "stall_sampled",
+      "episode_index": 45,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/stall_sampled/episode_0045.json",
+      "source_sha256": "6e5a61c066ea499d099b5b6975632aa03895ffdcd5cb9d668c2b46f17bd5db69",
+      "trace_sha256": "80eb5b7df2d51f75f2286d334d1acc23152bf0a173f328824f8dfd17ff0b4eb0",
+      "checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49",
+      "full_steps_verified": 657,
+      "shown_decisions": [
+        334,
+        634
+      ],
+      "completed": false,
+      "died": true,
+      "timed_out": false,
+      "video": "lost_success_stall_sampled.mp4",
+      "video_sha256": "994e761c0ced283ac902a4b33e5ac5678215687df20048c50fc02a07df06e81c"
+    },
+    {
+      "category": "early_death",
+      "level": "Level1-1",
+      "arm": "greedy",
+      "episode_index": 1,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/greedy/episode_0001.json",
+      "source_sha256": "7074a2bb58dce4e05337716eb75c272a0671a0e41378d2da050ddd2505cb70b9",
+      "trace_sha256": "bbcab58bb5434eaa5841c1161e59801f5d6cfd724551c94d1e4b41f6f52c6fb0",
+      "checkpoint_sha256": "913b0947a22b2e97aad1954e947a84d308b7172a43df01d8fc873c806e8dee49",
+      "full_steps_verified": 232,
+      "shown_decisions": [
+        0,
+        232
+      ],
+      "completed": false,
+      "died": true,
+      "timed_out": false,
+      "video": "early_death_greedy.mp4",
+      "video_sha256": "a7df6c15df4f70aea23a9a64d1b3fa2683714c0d852d5bdd60deef76a4a42f8a"
+    },
+    {
+      "category": "reliable_control",
+      "level": "Level1-3",
+      "arm": "greedy",
+      "episode_index": 0,
+      "source": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-3/greedy/episode_0000.json",
+      "source_sha256": "b315676fa83fff942ff58040a549afa592150a815747e27b8d18456d339b8019",
+      "trace_sha256": "95f497f9f9fc8f47ff7d7f72086453f848aa217bec1d8a320fea04561800160c",
+      "checkpoint_sha256": "6a99e5bb6b63088c88f0bfdbbcfe22d93600f60b6d373085615c0111c3093af7",
+      "full_steps_verified": 632,
+      "shown_decisions": [
+        0,
+        240
+      ],
+      "completed": true,
+      "died": false,
+      "timed_out": false,
+      "video": "reliable_control_greedy.mp4",
+      "video_sha256": "1801b9378b1640fb7845e4379d8daae50e2679500e30a80da545684c3a48c8f2"
+    }
+  ]
+}

@@ -2,6 +2,19 @@
 
 MuZero on Super Mario Bros (NES), sibling to [ppo_study](../ppo_study). Uses the same `gym-retro` + `mario.stimuli` integration for apples-to-apples comparison with the PPO baseline.
 
+## Results and internship handoff (20 September 2026)
+
+Start with [START_HERE](docs/handoff/START_HERE.md) for the presentation, verification and next experiments. Read the [project report](docs/handoff/REPORT.md) for achievements, human-performance context, MuZero's internals, evidence about failures and remaining experiments. The [handoff guide](docs/handoff/HANDOFF.md) maps code, data, checkpoints and how to resume work.
+
+Seven [figures](images/handoff/) are available as PNG, PDF and SVG, with a portable [evidence snapshot](docs/handoff/evidence.json). Regenerate them without model inference:
+
+```bash
+.venv/bin/python scripts/plot_project_handoff.py
+.venv/bin/python scripts/build_handoff_presentation.py
+```
+
+The active scope is 22 human-covered levels, with 21 evaluated in the current model benchmark and 5-3 explicitly missing. Broad human-level performance is not established. Independent confirmation shows a stall-triggered controller improves 1-1 from 11/100 to 86/100 completions, with unchanged weights and additional RAM-based stall detection; see the report for controls and limits.
+
 ## Setup
 
 ```bash
@@ -11,7 +24,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-`mario.stimuli/` is a symlink to the `ppo_study` copy (ROM + state files).
+`mario.stimuli/` supplies the ROM integration and state files. It is a direct clone in this workspace; the original BMRC setup used a symlink to the `ppo_study` copy.
 
 ## Train
 

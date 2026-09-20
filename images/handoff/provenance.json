@@ -1,0 +1,33 @@
+{
+  "as_of": "2026-09-19",
+  "evidence_sha256": "17eb6167a24fb6d7690841fd55936c0438e0037ea5018a66354e2589b22011c7",
+  "renderer_sha256": "af6ae0542c76b1bbec6bc6088d8553a31f9bfd49dd3b78b010fea6b282bc7fc6",
+  "sources": [
+    {
+      "path": "images/human_vs_agent_runthrough_all_levels_stochastic.json",
+      "sha256": "54cb4ada66b7be1f42893b0e737a7a3e8c832b21caa8c0044e2c675db9666588"
+    },
+    {
+      "path": "outputs/human_trajectories/human_level_stats.json",
+      "sha256": "13e055a381d39365485d50e870e62ef7f14517e5988b60bb034e500229683cbc"
+    },
+    {
+      "path": "outputs/controller_policy/value-commitment-v1-20260918/evidence_summary.json",
+      "sha256": "81ad493bc551d04a34ae85feaf959155a7628d1c1a61a2149316c7a7fba29c14"
+    },
+    {
+      "path": "outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-1/summary.json",
+      "sha256": "7e897649ea0ad7587b688beece615d39a83b4b02b6e02355e9ef5fba834fa7d4"
+    },
+    {
+      "path": "outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level6-1/summary.json",
+      "sha256": "a0c60c299a62c6ec60e2bd48499ca95bd76b33c8ecc97cf1191a966d92fa50cc"
+    },
+    {
+      "path": "outputs/controller_policy/stall-sampling-confirmation-v1-20260911/confirmation/Level1-3/summary.json",
+      "sha256": "40ba27579d579184e01c5e34bd61444afaccfa55824e413a630a40c792778b98"
+    }
+  ],
+  "matplotlib": "3.11.1",
+  "numpy": "2.4.4"
+}

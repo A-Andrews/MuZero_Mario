@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "source_archive_sha256": "e07aa99a32a389d3c91f7476120863e9e3f738a239125f084f79d50bd2e31b4a",
+  "source_files_verified": 307,
+  "elapsed_seconds": 6.810346009093337,
+  "python": "/tmp/muzero-handoff-py311-20260920/bin/python",
+  "checks": [
+    "ZIP integrity and every source file hash",
+    "both renderers run from isolated extraction with no outputs, models or ROM",
+    "benchmark CSV byte-identical",
+    "HTML has 13 slides"
+  ],
+  "renderer_sha256": {
+    "plot_project_handoff.py": "af6ae0542c76b1bbec6bc6088d8553a31f9bfd49dd3b78b010fea6b282bc7fc6",
+    "build_handoff_presentation.py": "b73e03ed7f112a4705857e63486aeb71b6b0d4719ac977292c894fb787721f4b"
+  },
+  "limits": "Final package may add this report and documentation commit metadata; renderer hashes identify verified executable code."
+}

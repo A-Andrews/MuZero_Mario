@@ -1,0 +1,7 @@
+{
+  "python": "3.11.13 (main, Jun 09 2025, 21:55:43) [GCC]",
+  "executable": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/.venv/bin/python",
+  "platform": "Linux-6.4.0-150600.23.73_15.0.14-cray_shasta_c_64k-aarch64-with-glibc2.38",
+  "machine": "aarch64",
+  "note": "Inventory of working cluster environment, not a portable installation lock. CUDA/PyTorch and source-built emulator need platform-specific installation."
+}

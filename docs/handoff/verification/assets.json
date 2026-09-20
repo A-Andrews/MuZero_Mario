@@ -1,0 +1,326 @@
+{
+  "as_of": "2026-09-20",
+  "bundles": [
+    {
+      "bundle": "muzero_mario_models_20260905",
+      "manifest": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/manifest.json",
+      "manifest_sha256": "8dc0019b5f4efe5a852f76b57664cc250f1db4d993ac6436acc5d3e86b99cb31",
+      "files": [
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-1.pt",
+          "level": "Level1-1",
+          "run": "spec-level1-1",
+          "sha256": "20ad354c0d282e3ee507ee77c012daa36c4b6ea323f37dd2cc52ca8a7f4a2e6d",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-2.pt",
+          "level": "Level1-2",
+          "run": "spec-level1-2",
+          "sha256": "560a083063be9034a97555754dbb38aa8b3223d6690b1c9c626b9ac8b2edb685",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-3.pt",
+          "level": "Level1-3",
+          "run": "spec-imit-level1-3",
+          "sha256": "6e27489624cb347566ea8cc0ccc7d7eba0155d2f6e65431fdc65c497125fd374",
+          "bytes": 90329746,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-1.pt",
+          "level": "Level2-1",
+          "run": "spec-level2-1",
+          "sha256": "edb4ff152b9222311173f19641839bd31fee1db815896fcabd2cd66ff02480ed",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-2.pt",
+          "level": "Level2-2",
+          "run": "spec-level2-2",
+          "sha256": "a0274a9eeb023df4733b261d48e9e5f324848e68690d218c12a6ccab88bed628",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-3.pt",
+          "level": "Level2-3",
+          "run": "spec-level2-3",
+          "sha256": "a012d893ba6de5d299bf4fb628c1498cc794f30dc9ac6aa7c7fe6b3febd3c154",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-1.pt",
+          "level": "Level3-1",
+          "run": "spec-level3-1",
+          "sha256": "9b037f7ddb74847329d1047bfeb68d4367e4eb189268790ca8075ccade7d14cf",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-2.pt",
+          "level": "Level3-2",
+          "run": "spec-level3-2",
+          "sha256": "09d62ea4ab11cdbfb7c0ca1641b6f803c44fe234690bfc78f329dc88eee80a9d",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-3.pt",
+          "level": "Level3-3",
+          "run": "spec-level3-3",
+          "sha256": "162b692c78b79a3f1abfe311956e0282faadf4830157397d4e85510a28d86d23",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-1.pt",
+          "level": "Level4-1",
+          "run": "spec-level4-1",
+          "sha256": "baffe9bd41eef8a8d14b89f6e5c76570c634cd0520c9b5e491c9d41af94884b7",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-2.pt",
+          "level": "Level4-2",
+          "run": "spec-level4-2",
+          "sha256": "716f3da116cad013bffa05784ce7a2096eae35aa43147c090a0e04d7618195cc",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-3.pt",
+          "level": "Level4-3",
+          "run": "spec-imit-level4-3",
+          "sha256": "0ff6c73d46426c699cbb152cd4d74da90e21c2273aaf7a96ac4b7482f8865644",
+          "bytes": 90329746,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-1.pt",
+          "level": "Level5-1",
+          "run": "spec-level5-1",
+          "sha256": "ac3833ccf4cb67e859518d1c668862dcb24eb435df78f7bc36421a0944c6a314",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-2.pt",
+          "level": "Level5-2",
+          "run": "spec-imit-level5-2",
+          "sha256": "ee8974b9a1f454a12591fc6b1a82373c73db52ab943bc2137e46af21c4097b0c",
+          "bytes": 90329938,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-3.pt",
+          "level": "Level5-3",
+          "run": "spec-level5-3",
+          "sha256": "051112f310826fc891bc3b6f1cd75deac4624b783fa50730bee5eaeafa52cdeb",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "latest.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-1.pt",
+          "level": "Level6-1",
+          "run": "spec-level6-1",
+          "sha256": "78b9299e72859ea5d485ad54f3daf284d55af7650d05a9507db538188cf660a2",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-2.pt",
+          "level": "Level6-2",
+          "run": "spec-level6-2",
+          "sha256": "f86f5860b2454fac50a09c7262d3846813c50efa955aeba5edfb7ca205ee13d8",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-3.pt",
+          "level": "Level6-3",
+          "run": "spec-level6-3",
+          "sha256": "ee4db59a23cc8e1cf8b2dc2af07d953431df823aed5415d67302181936ee22e6",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level7-1.pt",
+          "level": "Level7-1",
+          "run": "spec-level7-1",
+          "sha256": "c3dde55ad4f7cf6daf2d5f1c89a30cd7a0bc72ed93cecc429b83c79be0ec7f74",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level7-3.pt",
+          "level": "Level7-3",
+          "run": "spec-imit-level7-3",
+          "sha256": "aa7dd4946a811f0ea131f5eb86b401595f0127b43e66b5d273ce1aec541fdbee",
+          "bytes": 90329938,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-1.pt",
+          "level": "Level8-1",
+          "run": "spec-level8-1",
+          "sha256": "4fb663b1aeca1dcbe9b934669f01ceb052cb5cfd725acfedef23cbc42f6e7e8c",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-2.pt",
+          "level": "Level8-2",
+          "run": "spec-imit-level8-2",
+          "sha256": "53ad7c6b096522e819167699a0df66f7ec933d1aff94f49a86e1b9ed0ab122ad",
+          "bytes": 90329938,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-3.pt",
+          "level": "Level8-3",
+          "run": "spec-level8-3",
+          "sha256": "fad5347991bfa3bb89af5f033529f84691813e73ca3fee9afabd80a6d4b689c9",
+          "bytes": 90329874,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        }
+      ]
+    },
+    {
+      "bundle": "muzero_mario_comparison_20260905",
+      "manifest": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/manifest.json",
+      "manifest_sha256": "40431aa1ddabeb9b4abdefed881fc82e8f11dced50802369ef588bf9c8cc8e16",
+      "files": [
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/Level1-1.pt",
+          "level": "Level1-1",
+          "run": "spec-level1-1",
+          "sha256": "20ad354c0d282e3ee507ee77c012daa36c4b6ea323f37dd2cc52ca8a7f4a2e6d",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/Level1-2.pt",
+          "level": "Level1-2",
+          "run": "spec-level1-2",
+          "sha256": "560a083063be9034a97555754dbb38aa8b3223d6690b1c9c626b9ac8b2edb685",
+          "bytes": 90329618,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/level1-1-diag-v1.pt",
+          "level": "Level1-1",
+          "run": "level1-1-diag-v1",
+          "sha256": "a15c4fc24d3791c01cd18053869abd72daba82ee76c32f7a2b8eb2e96ee85208",
+          "bytes": 90331994,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/level1-2-diag-v1.pt",
+          "level": "Level1-2",
+          "run": "level1-2-diag-v1",
+          "sha256": "cab20050c64f2af54606c5d505b6e605671fe299f9de2dd876c5be5a641252c2",
+          "bytes": 90331994,
+          "verified": true,
+          "checkpoint_kind": "best.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/imit-all-v1.pt",
+          "level": "multi",
+          "run": "imit-all-v1",
+          "sha256": "2e2d9f8a4761113d89b3fda35a5f789414bad25cc1518a7e6895452f9cb93baa",
+          "bytes": 90330557,
+          "verified": true,
+          "checkpoint_kind": "latest.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/imit-sub01-v1.pt",
+          "level": "multi",
+          "run": "imit-sub01-v1",
+          "sha256": "519ca32d054c41109c356befaa4faef2578ea04e39e231d9e36e2a4c6c6e81ae",
+          "bytes": 90331183,
+          "verified": true,
+          "checkpoint_kind": "latest.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/curriculum-human.pt",
+          "level": "multi",
+          "run": "curriculum-human",
+          "sha256": "ee1a98846e5524e585ace39fbe9d023823b771e8394b25d44bea3ac70ba469e7",
+          "bytes": 90332634,
+          "verified": true,
+          "checkpoint_kind": "latest.pt"
+        },
+        {
+          "file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/curriculum-nohuman.pt",
+          "level": "multi",
+          "run": "curriculum-nohuman",
+          "sha256": "46a3d5f4b2fa3c99bf10939216554c00a61e58990c3bdc98b46513f7d9920516",
+          "bytes": 90333196,
+          "verified": true,
+          "checkpoint_kind": "latest.pt"
+        }
+      ]
+    }
+  ],
+  "directories": [
+    {
+      "path": "outputs/human_trajectories",
+      "exists": true,
+      "resolved": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/human_trajectories"
+    },
+    {
+      "path": "mario.stimuli/SuperMarioBros-Nes",
+      "exists": true,
+      "resolved": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/mario.stimuli/SuperMarioBros-Nes"
+    },
+    {
+      "path": "outputs/controller_policy/stall-sampling-confirmation-v1-20260911",
+      "exists": true,
+      "resolved": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-confirmation-v1-20260911"
+    },
+    {
+      "path": "outputs/controller_policy/search-leaf-values-v1b-20260919",
+      "exists": true,
+      "resolved": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/search-leaf-values-v1b-20260919"
+    },
+    {
+      "path": "diagnostic_outputs/value-target-audit-v1b-20260920",
+      "exists": true,
+      "resolved": "/home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/diagnostic_outputs/value-target-audit-v1b-20260920"
+    }
+  ],
+  "recipient_access": "not verified; checks use current account"
+}

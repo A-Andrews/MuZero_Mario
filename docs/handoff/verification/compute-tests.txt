@@ -1,0 +1,8 @@
+....................................                                     [100%]
+=============================== warnings summary ===============================
+src/env/env.py:13
+  /home/u6oz/atdandrews.u6oz/brain-project/MuZero_Mario/src/env/env.py:13: DeprecationWarning: The 'retro' package name is deprecated and will be removed in a future version. Please use 'import stable_retro' instead of 'import retro'.
+    import retro
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+36 passed, 1 warning in 8.25s

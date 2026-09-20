@@ -1,0 +1,57 @@
+{
+  "complete": true,
+  "conditions": [
+    {
+      "complete": true,
+      "condition": "greedy",
+      "deaths": 0,
+      "distinct_noop_draws": [
+        25
+      ],
+      "final_x_median": 3106.0,
+      "finished_trials": 1,
+      "infrastructure_errors": 0,
+      "level_completions": 1,
+      "observed_completion_rate": 1.0,
+      "pending_trials": 0,
+      "planned_trials": 1,
+      "terminal_other": 0,
+      "timeouts": 0,
+      "wilson95_observed": [
+        0.20654931437723745,
+        1.0
+      ]
+    }
+  ],
+  "identity": {
+    "checkpoint": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/controller_policy/stall-sampling-v1-20260911/checkpoints/Level6-1.pt",
+    "checkpoint_sha256": "338c80a50423d4e4f49e6e4fb054597d05cc855e0e14d49fefca9154e5ed2bbc",
+    "device": "cuda",
+    "env_step": 10786427,
+    "experiment_id": "stall-sampling-v1-20260911",
+    "implementation_sha256": "f30ddf60a9fd99ce8d742cba8e02626eec1272f95cb02b820b3f65f9a1703cce",
+    "inference": {
+      "amp": false,
+      "cudnn_benchmark": false,
+      "cudnn_tf32": true,
+      "deterministic_algorithms": false,
+      "matmul_tf32": false
+    },
+    "level": "Level6-1",
+    "manifest_sha256": "196607dca53822515deb8a5618faa0f276feb7d183c84b816a050129e591892a",
+    "numpy_version": "2.4.4",
+    "plan_sha256": "d194151d181103c0dd29441589402a740495d00a1486665551d8a825bdf36ed8",
+    "reset_settings": {
+      "completion_bonus": 200.0,
+      "done_on_life_loss": true,
+      "noop_max": 30,
+      "skip_to_control": true
+    },
+    "smoke": true,
+    "split": "development",
+    "torch_version": "2.13.0+cu126",
+    "training_step": 570041
+  },
+  "interpretation": "Fixed-checkpoint development diagnostic; partial counts are interim",
+  "split": "development"
+}

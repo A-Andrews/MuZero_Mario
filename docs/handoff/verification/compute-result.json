@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "elapsed_seconds": 395.193155434099,
+  "clips": 6,
+  "evaluation": "one frozen-checkpoint greedy Level6-1 smoke trial; not new performance evidence",
+  "smoke_summary_sha256": "2e9526ff0000fb8c099f7393796c4a079bc0163f0cff11a0a571ad2546950840",
+  "checkpoint_sha256": "338c80a50423d4e4f49e6e4fb054597d05cc855e0e14d49fefca9154e5ed2bbc",
+  "python": "3.11.13 (main, Jun 09 2025, 21:55:43) [GCC]",
+  "torch": "2.13.0+cu126",
+  "cuda_available": true
+}

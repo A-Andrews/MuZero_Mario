@@ -1,0 +1,3 @@
+# Portable figure/presentation environment; verified separately from cluster model inference.
+numpy==2.4.4
+matplotlib==3.11.1
