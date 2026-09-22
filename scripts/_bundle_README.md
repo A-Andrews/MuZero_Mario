@@ -12,6 +12,14 @@ and a sha256 of every file. Read it before using anything — see
 
 Nothing here needs stable-retro, the emulator or the ROM.
 
+These exports are for inference and evaluation. Packaging removed optimizer,
+scheduler and RNG state, so they cannot be passed directly to the project's
+training resume loader. Training continuation requires the original full
+checkpoint under `outputs/runs/<run>/checkpoints/`, its configuration and launcher
+recipe. Even full checkpoints do not restore self-play replay or the historical
+lagged target network. The repository's `docs/handoff/TRAINING_RESUME.md` explains
+the restart procedure and links the original-checkpoint inventory.
+
 ---
 
 ## Install

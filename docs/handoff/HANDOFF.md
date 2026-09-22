@@ -1,6 +1,6 @@
 # Resuming MuZero–Mario
 
-Start at [START_HERE.md](START_HERE.md) for the presentation and verification; read [REPORT.md](REPORT.md) for the scientific account. This file is the operational map as of 20 September 2026. The working tree already contains substantial uncommitted experiments and documentation; preserve them and frozen experiment directories. This handoff adds reports and figure generation without changing the training or search implementation.
+Start at [START_HERE.md](START_HERE.md) for the presentation and verification; read [REPORT.md](REPORT.md) for the scientific account. Scientific evidence is frozen as of 20 September 2026; these operational instructions were updated on 22 September. The documentation handoff was committed in `5ce9143`, and the experimental implementation and remaining project documentation were committed in `312b577` ("Diagnose failures and prepare for pause"). Preserve the frozen experiment directories and external assets as well as the Git history. See [RELEASE.md](RELEASE.md) for the relationship between commits and packaged snapshots.
 
 ## Read in this order
 
@@ -55,6 +55,12 @@ The evidence snapshot contains selected fields from the source files below, plus
 | `logs/` | Scheduler stdout/stderr; a submission or passing smoke is not proof of a full result |
 
 Historical bundles: `muzero_mario_models_20260905.zip` (23 checkpoints, including incomplete 5-3 and out-of-active-scope 2-2) and `muzero_mario_comparison_20260905.zip` (8 models). Consult each manifest for training provenance and hashes; those historical bundles do not imply all their models are competent or all are active comparison levels. The September bundle includes `frames_to_obs`; older bundle documentation may not.
+
+## Resuming training
+
+The exported model bundles support inference and evaluation; their optimizer, scheduler and RNG state were removed. They cannot be passed directly to the current training resume loader. Use an original `outputs/runs/<run>/checkpoints/latest.pt` for continuation, retaining its symlink target, saved configuration and launcher recipe. The [training restart guide](TRAINING_RESUME.md) explains checkpoint selection, configuration, output isolation and budget checks; the [original-checkpoint inventory](verification/training-checkpoints-20260922.json) identifies the 29 runs represented in the two bundles.
+
+Original training checkpoints restore weights, optimizer state, saved scheduler state, step counters and saved RNG state. Self-play replay, worker/emulator state and the historical lagged target network are not restored. Treat continuation as a restart with retained learner state, not an exact uninterrupted trajectory. No training restart was executed for this documentation update.
 
 ## Code map and conventions
 

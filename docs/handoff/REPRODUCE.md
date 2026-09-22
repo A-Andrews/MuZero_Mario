@@ -2,6 +2,8 @@
 
 Two verification tiers are separate: a fresh lightweight environment for figures/presentation, and the working GPU/emulator environment for model execution. An environment inventory is not evidence of a fresh installation of the complete training stack.
 
+For training continuation, use [TRAINING_RESUME.md](TRAINING_RESUME.md) and its original-checkpoint inventory. The evaluation checks below do not verify training resumption, and the exported models omit the optimizer state required by the training loader.
+
 ## 1. Figures and presentation on a clean Python environment
 
 Use **Python 3.11** explicitly. This host's bare `python3` is older and cannot install the pinned plotting packages.

@@ -6,6 +6,8 @@
 
 **For a new contributor:** follow [REPRODUCE.md](REPRODUCE.md), use [HANDOFF.md](HANDOFF.md) to navigate the implementation and assets, and read the three [next-experiment cards](NEXT_EXPERIMENTS.md). Resolve the recipient-specific items in [ACCESS_AND_OWNERSHIP.md](ACCESS_AND_OWNERSHIP.md).
 
+**For training continuation:** read [TRAINING_RESUME.md](TRAINING_RESUME.md). Exported models are for inference; resumption needs original training checkpoints and starts with fresh self-play replay. Operational documentation was revised on 22 September; the scientific evidence remains the 20 September snapshot.
+
 ## What is in the handoff
 
 - Scientific report with citations, denominators, scope and limitations.

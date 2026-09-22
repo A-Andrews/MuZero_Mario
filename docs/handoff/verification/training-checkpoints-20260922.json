@@ -1,0 +1,1931 @@
+{
+  "as_of": "2026-09-22T11:38:24.883442+00:00",
+  "git_base": "312b577",
+  "scope": "29 original runs represented by 31 exported model files; not a complete inventory of every training run",
+  "method": "Current-account file existence/readability, symlink resolution and size checks; SHA-256 of configuration and completion-marker files only. Checkpoint payloads were not loaded or hashed. No training restart or backup was performed.",
+  "runs": [
+    {
+      "run": "curriculum-human",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/curriculum-human.pt",
+          "checkpoint_kind": "latest.pt",
+          "source_checkpoint": "outputs/runs/curriculum-human/checkpoints/latest.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/curriculum-human/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/checkpoints/step_2797824.pt",
+        "symlink_target": "step_2797824.pt",
+        "bytes": 270767401
+      },
+      "best": {
+        "path": "outputs/runs/curriculum-human/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/checkpoints/best.pt",
+        "bytes": 270760513
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/curriculum-human/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/.hydra/config.yaml",
+          "bytes": 3352,
+          "sha256": "821cc2c1c10e084fccf683ec06e30fa906d127ae54ea38d72cb9c14261e440d8"
+        },
+        {
+          "path": "outputs/runs/curriculum-human/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/.hydra/overrides.yaml",
+          "bytes": 774,
+          "sha256": "17cc9beb1fd378d26ca580ee8d56f03e54939407851748ae3a1e98427120e85a"
+        },
+        {
+          "path": "outputs/runs/curriculum-human/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/.hydra/hydra.yaml",
+          "bytes": 5008,
+          "sha256": "0a1bc53d3ae181845543f60ad978cc967ee0dfc5db6456bcfdf9bcffde574074"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/curriculum-human/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-human/TRAINING_COMPLETE",
+        "bytes": 78,
+        "sha256": "1654cd476130da33afa36d7ba88f79d1edeb643006133daba4e23983b83a06df"
+      }
+    },
+    {
+      "run": "curriculum-nohuman",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/curriculum-nohuman.pt",
+          "checkpoint_kind": "latest.pt",
+          "source_checkpoint": "outputs/runs/curriculum-nohuman/checkpoints/latest.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/curriculum-nohuman/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/checkpoints/step_2695837.pt",
+        "symlink_target": "step_2695837.pt",
+        "bytes": 270767401
+      },
+      "best": {
+        "path": "outputs/runs/curriculum-nohuman/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/checkpoints/best.pt",
+        "bytes": 270760385
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/curriculum-nohuman/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/.hydra/config.yaml",
+          "bytes": 3322,
+          "sha256": "a0380c9d80ccd67a472a8e7fafa6ddbdb3ba3c870516fda7ce10d098d35122a7"
+        },
+        {
+          "path": "outputs/runs/curriculum-nohuman/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/.hydra/overrides.yaml",
+          "bytes": 665,
+          "sha256": "108290b93487ec8b9ba8edd17f8d53311657115b4e7ddcd6626f4d95cedc73f8"
+        },
+        {
+          "path": "outputs/runs/curriculum-nohuman/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/.hydra/hydra.yaml",
+          "bytes": 4790,
+          "sha256": "149732be3240b0df732ee4f6b78cdbf075fed7cf41c8871996d75c26b6b36e47"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/curriculum-nohuman/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/curriculum-nohuman/TRAINING_COMPLETE",
+        "bytes": 78,
+        "sha256": "e29fb9e6aa630180b0719b4478a63c128336de2db5cc6b9c6f84be699925bef7"
+      }
+    },
+    {
+      "run": "imit-all-v1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/imit-all-v1.pt",
+          "checkpoint_kind": "latest.pt",
+          "source_checkpoint": "outputs/runs/imit-all-v1/checkpoints/latest.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/imit-all-v1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/checkpoints/step_381947.pt",
+        "symlink_target": "step_381947.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/imit-all-v1/checkpoints/best.pt",
+        "exists": false,
+        "readable": false,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/checkpoints/best.pt"
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/imit-all-v1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/.hydra/config.yaml",
+          "bytes": 2901,
+          "sha256": "16fbd3e3576571bfdcfb808d0b2f082d90725d4bc9b23fc66c91f3dcfb22f8d8"
+        },
+        {
+          "path": "outputs/runs/imit-all-v1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/.hydra/overrides.yaml",
+          "bytes": 306,
+          "sha256": "29c25794d23a5745d4daedcdc72f11e836f7d99a6bee5b807ddc3fb5f8ac5a07"
+        },
+        {
+          "path": "outputs/runs/imit-all-v1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/.hydra/hydra.yaml",
+          "bytes": 4035,
+          "sha256": "186a08caa2454c0013736ed82218727ab702901d11bd9e2f4c95711c9c00faf7"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/imit-all-v1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-all-v1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "d30de0567f805de356050512b597b9f0a5917ddbd4d6af18d893487e086292ef"
+      }
+    },
+    {
+      "run": "imit-sub01-v1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/imit-sub01-v1.pt",
+          "checkpoint_kind": "latest.pt",
+          "source_checkpoint": "outputs/runs/imit-sub01-v1/checkpoints/latest.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/imit-sub01-v1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/checkpoints/step_398422.pt",
+        "symlink_target": "step_398422.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/imit-sub01-v1/checkpoints/best.pt",
+        "exists": false,
+        "readable": false,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/checkpoints/best.pt"
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/imit-sub01-v1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/.hydra/config.yaml",
+          "bytes": 2915,
+          "sha256": "500a204b35a85e1d3e889070f799f0e27e20068c3722305db39e0cb5a6b88db6"
+        },
+        {
+          "path": "outputs/runs/imit-sub01-v1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/.hydra/overrides.yaml",
+          "bytes": 344,
+          "sha256": "556369442102cf54327ce34c4c39a201733e90081a3e39a8aded1d79608e33df"
+        },
+        {
+          "path": "outputs/runs/imit-sub01-v1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/.hydra/hydra.yaml",
+          "bytes": 4119,
+          "sha256": "611fe0b512f2506a497fee43575013b906a161ef0a5c6d893971d68bd541863b"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/imit-sub01-v1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/imit-sub01-v1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "3c0b887b2b28cc22afd4e174659c42473d48636b0b629016dc326741259c50d3"
+      }
+    },
+    {
+      "run": "level1-1-diag-v1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/level1-1-diag-v1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/level1-1-diag-v1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/level1-1-diag-v1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/checkpoints/step_780462.pt",
+        "symlink_target": "step_780462.pt",
+        "bytes": 270765631
+      },
+      "best": {
+        "path": "outputs/runs/level1-1-diag-v1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/checkpoints/best.pt",
+        "bytes": 270759491
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/level1-1-diag-v1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/.hydra/config.yaml",
+          "bytes": 2837,
+          "sha256": "29d5dd4fd5341a4b9491feaba0883c0644b1fb0f817e7410a59e236168e53f41"
+        },
+        {
+          "path": "outputs/runs/level1-1-diag-v1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/.hydra/overrides.yaml",
+          "bytes": 510,
+          "sha256": "0c318e5d33109733bb9e6e6a67338bf4aef3a25552099bbd4d8e00ae0801b9d1"
+        },
+        {
+          "path": "outputs/runs/level1-1-diag-v1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/.hydra/hydra.yaml",
+          "bytes": 4468,
+          "sha256": "edd45d3c50a38982756bae1e7b9c6b3a22829e904dfac35acaa60bbba52e809b"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/level1-1-diag-v1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-1-diag-v1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "a9dd0b110e39c476a71d6f4f82d899a99b151c3f6d505ff9596893f972626bd9"
+      }
+    },
+    {
+      "run": "level1-2-diag-v1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/level1-2-diag-v1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/level1-2-diag-v1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/level1-2-diag-v1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/checkpoints/step_763004.pt",
+        "symlink_target": "step_763004.pt",
+        "bytes": 270765631
+      },
+      "best": {
+        "path": "outputs/runs/level1-2-diag-v1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/checkpoints/best.pt",
+        "bytes": 270759555
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/level1-2-diag-v1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/.hydra/config.yaml",
+          "bytes": 2837,
+          "sha256": "db740b4cd18cc4d0bce3d171ba17e05a6e7e3bd83faffd9631d313a6a04dc7f8"
+        },
+        {
+          "path": "outputs/runs/level1-2-diag-v1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/.hydra/overrides.yaml",
+          "bytes": 510,
+          "sha256": "43a9e61cf8837c1beb744974e480af584d637db89eae3c30b25bdb88517b963c"
+        },
+        {
+          "path": "outputs/runs/level1-2-diag-v1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/.hydra/hydra.yaml",
+          "bytes": 4468,
+          "sha256": "b6fae49e705882f02ccd40b255996bbaa959ebc1eec6211439e99cd7b1d00fdf"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/level1-2-diag-v1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/level1-2-diag-v1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "ab32ddb2bb705035b7e5d2075bbad3f1bb05b66e047d4d411c260dfca38d20d0"
+      }
+    },
+    {
+      "run": "spec-imit-level1-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-imit-level1-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-imit-level1-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/checkpoints/step_815360.pt",
+        "symlink_target": "step_815360.pt",
+        "bytes": 270765951
+      },
+      "best": {
+        "path": "outputs/runs/spec-imit-level1-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/checkpoints/best.pt",
+        "bytes": 270759811
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-imit-level1-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/.hydra/config.yaml",
+          "bytes": 3072,
+          "sha256": "b6ccb022eadd9677286ca21f5bf467d376ac9b5cb4734b71a1677780e3e99db3"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level1-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/.hydra/overrides.yaml",
+          "bytes": 781,
+          "sha256": "bd855a37a803a06a079fa99f8d1243973c952101d0ed945af9d3441f825ca7b2"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level1-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/.hydra/hydra.yaml",
+          "bytes": 5028,
+          "sha256": "e3e4c5d70a0954a20015d9b3727e6c932e57d88fb9837d63faefeeba0c0b3388"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-imit-level1-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level1-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "3ffbe29fdc30dbad64c776c237e3b0c33f13093bb7796a7764e0d64e2c602c98"
+      }
+    },
+    {
+      "run": "spec-imit-level4-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-imit-level4-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-imit-level4-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/checkpoints/step_813729.pt",
+        "symlink_target": "step_813729.pt",
+        "bytes": 270765887
+      },
+      "best": {
+        "path": "outputs/runs/spec-imit-level4-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/checkpoints/best.pt",
+        "bytes": 270759875
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-imit-level4-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/.hydra/config.yaml",
+          "bytes": 3072,
+          "sha256": "ad96ad64528cf56f1ff8d9a8831fe50068d30e11a27605a6c112825a34234f5b"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level4-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/.hydra/overrides.yaml",
+          "bytes": 781,
+          "sha256": "1bc8138538c622f7b2fd9309ce34fcbac1f37c27de6100f161bf3989c44206dc"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level4-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/.hydra/hydra.yaml",
+          "bytes": 5028,
+          "sha256": "70c9bc3d34fa4e53adc78c0ce6021dc336280280e9e530fd3df41d76eabe27cf"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-imit-level4-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level4-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "83f7bfb136889dc35e328545c2bdd3dfbf7c8b957c05bedf9bcfd2b0c1864106"
+      }
+    },
+    {
+      "run": "spec-imit-level5-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-imit-level5-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-imit-level5-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/checkpoints/step_783301.pt",
+        "symlink_target": "step_783301.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-imit-level5-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/checkpoints/best.pt",
+        "bytes": 270760003
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-imit-level5-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/.hydra/config.yaml",
+          "bytes": 3221,
+          "sha256": "54e5a1c16cfac94473fb0d89a6ddde3470565378a170a6a45a0f588b93f85be0"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level5-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/.hydra/overrides.yaml",
+          "bytes": 781,
+          "sha256": "a7dc78f95531746149dfcedbfc08a8b1c47f6e889bfd026a215deefb8ed8618a"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level5-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/.hydra/hydra.yaml",
+          "bytes": 5028,
+          "sha256": "c47a4af196a69d0d399e21e065c44d0ce8c5285e184ff001390a5a7fd94268cf"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-imit-level5-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level5-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "1ec127857b018737d793858bda236db1b7978beef92d40d8e82aef2813e6ab7a"
+      }
+    },
+    {
+      "run": "spec-imit-level7-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level7-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-imit-level7-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-imit-level7-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/checkpoints/step_802585.pt",
+        "symlink_target": "step_802585.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-imit-level7-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/checkpoints/best.pt",
+        "bytes": 270760003
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-imit-level7-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/.hydra/config.yaml",
+          "bytes": 3221,
+          "sha256": "85f6fdacb379c2123c60a3e8f3ba329a7e5ccead77b13fc1dae7cd74039a5b8a"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level7-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/.hydra/overrides.yaml",
+          "bytes": 781,
+          "sha256": "b3b9acafea72cacd85bc82c096d115b90528d392a490724deb65be474b7abfbb"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level7-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/.hydra/hydra.yaml",
+          "bytes": 5028,
+          "sha256": "caacb601eb1966f2bda6fb6831f7a84a16c35dd99ad19c8dd64d3b91ff0f519e"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-imit-level7-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level7-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "03519475d1be7d30e5b32eb67e0b34ce1745d3e0b7062f01a3a3c074e45f7ddb"
+      }
+    },
+    {
+      "run": "spec-imit-level8-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-imit-level8-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-imit-level8-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/checkpoints/step_792581.pt",
+        "symlink_target": "step_792581.pt",
+        "bytes": 270766143
+      },
+      "best": {
+        "path": "outputs/runs/spec-imit-level8-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/checkpoints/best.pt",
+        "bytes": 270760003
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-imit-level8-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/.hydra/config.yaml",
+          "bytes": 3221,
+          "sha256": "6c04d1ff0dc73426e18a4c38be8f3c86607f6e6777813dd2abea8ebc1fce84f6"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level8-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/.hydra/overrides.yaml",
+          "bytes": 781,
+          "sha256": "5c1a3a3247cf8f3d440de425815e98dc96c0e1d79128bae4d00d7e7e022d7e70"
+        },
+        {
+          "path": "outputs/runs/spec-imit-level8-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/.hydra/hydra.yaml",
+          "bytes": 5028,
+          "sha256": "b09789f802036e7a27d3cf3651eacfe885d98c8d6fcabe1afdf3b33bc9aa770a"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-imit-level8-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-imit-level8-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "bf03c9d5956a9593742e03478039a9c3f447f421f60f3034f1982c8a96c86ab7"
+      }
+    },
+    {
+      "run": "spec-level1-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level1-1/checkpoints/best.pt"
+        },
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/Level1-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level1-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level1-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/checkpoints/step_678617.pt",
+        "symlink_target": "step_678617.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level1-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level1-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "9f08c9de8eee98d2c5a8937d21e5bd5a4fd49fbdc990fba2a39c0cb36b525074"
+        },
+        {
+          "path": "outputs/runs/spec-level1-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "9b27e385143871378848fa9b35415c87912d821ec85fd78febb7fc7e501eb7cb"
+        },
+        {
+          "path": "outputs/runs/spec-level1-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "f33c10e2ae2687596eb9143a9fffc9207db1ba5acef72dbe76317aa02e2f6db9"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level1-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "df9626558975d64bd7c59d67a39880bb067a1cd54d8f60e73e37381bb817e5fa"
+      }
+    },
+    {
+      "run": "spec-level1-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level1-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level1-2/checkpoints/best.pt"
+        },
+        {
+          "bundle": "muzero_mario_comparison_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_comparison_20260905/checkpoints/Level1-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level1-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level1-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/checkpoints/step_740077.pt",
+        "symlink_target": "step_740077.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level1-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level1-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "b83c789f4914af4790b9d824105fb5fb5d025e40751c5a2303c8a8fb07ce60ba"
+        },
+        {
+          "path": "outputs/runs/spec-level1-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "9a2fa3e5d34f1ebd9b6019e624622c85a515cef4e8107d1fffffc4ba533d8067"
+        },
+        {
+          "path": "outputs/runs/spec-level1-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "8cdc69ee5569e64fc12a6a17a100ee4796ea576296a92a8f2f3171c895f77cce"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level1-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level1-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "e1d52ce6863aabfc8a8d23e50a69720f003bd87e37ff906075e8856d4fb87668"
+      }
+    },
+    {
+      "run": "spec-level2-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level2-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level2-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/checkpoints/step_755015.pt",
+        "symlink_target": "step_755015.pt",
+        "bytes": 270765887
+      },
+      "best": {
+        "path": "outputs/runs/spec-level2-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level2-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "8369eb10e2a209ebd875782bd09b3809a26c90fc45721679b45e6c87a8c98ae2"
+        },
+        {
+          "path": "outputs/runs/spec-level2-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "224dc3ffb09cfbe56cf1766b34c8b5d4665b3885e713dc18f01ecf8c4631c954"
+        },
+        {
+          "path": "outputs/runs/spec-level2-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "f040f46a4cab83b3a339c34078d2fc057d3ccdcd42d1afb43e18efa149f6d373"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level2-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "0dd5b1a32b1085f046d5c69a234ce076d4e8cd00c9338d761ab38203efd5fbf9"
+      }
+    },
+    {
+      "run": "spec-level2-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level2-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level2-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/checkpoints/step_755831.pt",
+        "symlink_target": "step_755831.pt",
+        "bytes": 270765759
+      },
+      "best": {
+        "path": "outputs/runs/spec-level2-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/checkpoints/best.pt",
+        "bytes": 270759747
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level2-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "2b2c4d03b02db399f7bc10ae9f4b99d2c4ce0819aa646e15caaae19d097a9866"
+        },
+        {
+          "path": "outputs/runs/spec-level2-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "4ea54afd1f9253fa36b6563454ac03293d4abffd5ae1af283f4de49143832b7a"
+        },
+        {
+          "path": "outputs/runs/spec-level2-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "d2a444a5c7d1414a23b249b206888930001cb4a1f663bcfe9e2de0799a60c06b"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level2-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "6b689f9f7693d935d579dce13cad7118b2a2ce5ae0642b1a0af943d15cd74b00"
+      }
+    },
+    {
+      "run": "spec-level2-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level2-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level2-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level2-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/checkpoints/step_735624.pt",
+        "symlink_target": "step_735624.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level2-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level2-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "8f995e14e2334e928c650ca03f458c4ad25caccafdf01ac2962625e8328852e1"
+        },
+        {
+          "path": "outputs/runs/spec-level2-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "29990275ecf07133704f148a97146bca8f7f723022ac0b6d9aa6dd23415704f7"
+        },
+        {
+          "path": "outputs/runs/spec-level2-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "ec981c8ad45d4aa0e9282378b989d708fc06425ae9d600d708eebf46968e2af0"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level2-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level2-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "9436fda942c6ef7506e8eb2effa3325b89e9537e52f2b885513ec62e8ff8c44a"
+      }
+    },
+    {
+      "run": "spec-level3-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level3-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level3-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/checkpoints/step_746967.pt",
+        "symlink_target": "step_746967.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level3-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level3-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "ab48d5e66783f1edcd3174365928b9f631d07aec82ebdb47a027cdb1982a2fff"
+        },
+        {
+          "path": "outputs/runs/spec-level3-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "5aaefeb8b64556c9b5bec7541ef77ecc69c5cb455afc88805d03787791f47552"
+        },
+        {
+          "path": "outputs/runs/spec-level3-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "bbd7edb0a82d31b13ffd0880ea3bcda26afd68e2b0201b792f467b4991466113"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level3-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "0312512a2c0b1648591c2f8368cdf5580cb2f610a400375e30b191d0d0f507b5"
+      }
+    },
+    {
+      "run": "spec-level3-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level3-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level3-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/checkpoints/step_751919.pt",
+        "symlink_target": "step_751919.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level3-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level3-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "87ff30697878da48ce868cf153789964967b7e6c9604a0f9d761dafb2c825a1e"
+        },
+        {
+          "path": "outputs/runs/spec-level3-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "8c8e5128d1c1dce80a8aea8fbeee0a63ea230b7e7556943da7a48b14ec76f373"
+        },
+        {
+          "path": "outputs/runs/spec-level3-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "1fd9f83d5975f0ecabbb3421af56d4fa1d5bfd9db953d7301172b8a8baef9bd0"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level3-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "9c670f8527bcbb0f2bd2453daffb7ec43fdc4d79c1457eb8c565b553c5dcb990"
+      }
+    },
+    {
+      "run": "spec-level3-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level3-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level3-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level3-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/checkpoints/step_701070.pt",
+        "symlink_target": "step_701070.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level3-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/checkpoints/best.pt",
+        "bytes": 270759619
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level3-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "bc031d79f21a2fc57d5838b0d4d2455da330464872ea42db2db39a245be2fee1"
+        },
+        {
+          "path": "outputs/runs/spec-level3-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "fb03a78d1f938891be46973a3f247de0ff0b4870f111b6b822ff96ec319a3fc2"
+        },
+        {
+          "path": "outputs/runs/spec-level3-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "73b6664911a79b745c2b82efe259d2da0710350334b1a1c8ad2599696f8bc200"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level3-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level3-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "ebcf05a40605ad5ae8618980364910b6fd65e0831a04693851d77e063bbc98ac"
+      }
+    },
+    {
+      "run": "spec-level4-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level4-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level4-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/checkpoints/step_722425.pt",
+        "symlink_target": "step_722425.pt",
+        "bytes": 270765759
+      },
+      "best": {
+        "path": "outputs/runs/spec-level4-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/checkpoints/best.pt",
+        "bytes": 270759683
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level4-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "9a328a48007d1e061c7110b9a99dccf3a84d1172cc4dfb4af287c0def62cfeab"
+        },
+        {
+          "path": "outputs/runs/spec-level4-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "bf53486d995f696a03083fa3e33a9eecd17125fcd31c512a051242318349826b"
+        },
+        {
+          "path": "outputs/runs/spec-level4-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "4b78bfbb3f9fce5da3c3d4110e5bdd1c943219a109336660ff47847b1bc0d38e"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level4-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "1ec069eaaf1aa055775efea2a3f68559b4d431b162a59124da6faa679e66946e"
+      }
+    },
+    {
+      "run": "spec-level4-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level4-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level4-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level4-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/checkpoints/step_755970.pt",
+        "symlink_target": "step_755970.pt",
+        "bytes": 270765823
+      },
+      "best": {
+        "path": "outputs/runs/spec-level4-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/checkpoints/best.pt",
+        "bytes": 270759619
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level4-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/.hydra/config.yaml",
+          "bytes": 2962,
+          "sha256": "88e58d33b10b5918e39cf00b761da8f757191b75e7d9449b69b233cb73df8942"
+        },
+        {
+          "path": "outputs/runs/spec-level4-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "34ebd14491d614410ea9f44c445432063377da19c802e2330f93bb17be92c99e"
+        },
+        {
+          "path": "outputs/runs/spec-level4-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "f915792b3d211d1591076af91cb05c2b7e7dac9e98c66f419fe82d35d5c1c7f6"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level4-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level4-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "39f00754db722e157a29847c1683111a74298156a92a86358ed36089419ac987"
+      }
+    },
+    {
+      "run": "spec-level5-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level5-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level5-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/checkpoints/step_732598.pt",
+        "symlink_target": "step_732598.pt",
+        "bytes": 270766015
+      },
+      "best": {
+        "path": "outputs/runs/spec-level5-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/checkpoints/best.pt",
+        "bytes": 270758147
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level5-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "62378f463dd20ae9cb8918f5ba0117cd71615cb290afae5f7add5f9b73d0c234"
+        },
+        {
+          "path": "outputs/runs/spec-level5-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "1bea05bfd6544eefde1c497158f04dceca8d5e6a4145f11d5a37c20293f9fdfe"
+        },
+        {
+          "path": "outputs/runs/spec-level5-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "ba588a5320fdbc346d8bd4372b5e7384bc448d4fc2c4cf6a3e620acccdd79652"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level5-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "aa9926dc3578049e14d49fcc79fbeaf47ae83a294fbea9f0d14dacfc3440fe3f"
+      }
+    },
+    {
+      "run": "spec-level5-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level5-3.pt",
+          "checkpoint_kind": "latest.pt",
+          "source_checkpoint": "outputs/runs/spec-level5-3/checkpoints/latest.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level5-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/checkpoints/step_767024.pt",
+        "symlink_target": "step_767024.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-level5-3/checkpoints/best.pt",
+        "exists": false,
+        "readable": false,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/checkpoints/best.pt"
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level5-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "f355d6dc10e26b0031e1d6b886c2da30a8f5b871397a705a424686d40002c342"
+        },
+        {
+          "path": "outputs/runs/spec-level5-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "98733b364df1e4eb6661f328f5222b831ce0f9c793b6cca05499e4a5c6153eeb"
+        },
+        {
+          "path": "outputs/runs/spec-level5-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "06fee810f2788e72f994c004aaf61996009a1102d83c040da76cbaeb424c2f3b"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level5-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level5-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "036ce8da3eae4724cde368092a5f47931b3ad097f560f3fd868dce5dabc61a38"
+      }
+    },
+    {
+      "run": "spec-level6-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level6-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level6-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/checkpoints/step_775725.pt",
+        "symlink_target": "step_775725.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-level6-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/checkpoints/best.pt",
+        "bytes": 270759875
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level6-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "f684b75574db7e5c1ed4824c0437c4f009aa82fb161ffe2b3e945cfe1c8ae155"
+        },
+        {
+          "path": "outputs/runs/spec-level6-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "1cc4cf48ab692248c39b95119d0b848a46ddbc988dda91fce8e75153cad2284d"
+        },
+        {
+          "path": "outputs/runs/spec-level6-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "c37ad719a46dcfba9cae358469cf4e804dab0240349386dd32c8d4a97a76bd22"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level6-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "3c7cc5aeaeffe7257fee30108425146af3c85f08b1b7bf3a51551ee22248f15b"
+      }
+    },
+    {
+      "run": "spec-level6-2",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-2.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level6-2/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level6-2/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/checkpoints/step_774422.pt",
+        "symlink_target": "step_774422.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-level6-2/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/checkpoints/best.pt",
+        "bytes": 270760003
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level6-2/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "0ced4e570e5dbd2da1c0e9cbaf4b32d27ab9d9f256f17f92d22f9eeff18389ba"
+        },
+        {
+          "path": "outputs/runs/spec-level6-2/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "3525548fcd9d0a1cc4954cbf90d3840cab787f50b96ec7a52da305005743c04b"
+        },
+        {
+          "path": "outputs/runs/spec-level6-2/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "1125d7b1336e920d4a5772b380ab9af0d105d96794b42f7c7e36bdf6fff2362a"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level6-2/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-2/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "34d532a72c34f13103286b42360893c9d28dd8a562ff65ba609b78eee40bf9d3"
+      }
+    },
+    {
+      "run": "spec-level6-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level6-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level6-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level6-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/checkpoints/step_766559.pt",
+        "symlink_target": "step_766559.pt",
+        "bytes": 270766143
+      },
+      "best": {
+        "path": "outputs/runs/spec-level6-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/checkpoints/best.pt",
+        "bytes": 270759939
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level6-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "19077594c7cdaf206126fd026ca6a0a0bb8d464ccdd2d29d35e5bbed98b14fc7"
+        },
+        {
+          "path": "outputs/runs/spec-level6-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "3585587ff30e99cb86b8fddcd20f89012279a8a05ff429963efc8bb0a54ec1a4"
+        },
+        {
+          "path": "outputs/runs/spec-level6-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "6a74fe7dfac111a01bb083ff6ed6c29f8fa0ae32d9e0ba11bad1712187c24aa1"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level6-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level6-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "07f7cbaf368f9935f45ded23ca742bc0da03a05f71fcd334ee3f07a5b47ca71f"
+      }
+    },
+    {
+      "run": "spec-level7-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level7-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level7-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level7-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/checkpoints/step_763587.pt",
+        "symlink_target": "step_763587.pt",
+        "bytes": 270766015
+      },
+      "best": {
+        "path": "outputs/runs/spec-level7-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/checkpoints/best.pt",
+        "bytes": 270759939
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level7-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "fa959f50d9df4016330f9cbbb474ce60a3e8671dd51c6b5f2019d94eff979c57"
+        },
+        {
+          "path": "outputs/runs/spec-level7-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "c19495de81d6113883537b4f1c73580d2c4c4f46a020e948c7d9bee500a41d31"
+        },
+        {
+          "path": "outputs/runs/spec-level7-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "047a7f97e15419f21f83580de39f94073e04a08f57a4e6c75f4e46e16a074cb1"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level7-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level7-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "ad188d0f3769a7ecbf1463ad45de84a4cccd002e54d2994307ed4329e9335565"
+      }
+    },
+    {
+      "run": "spec-level8-1",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-1.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level8-1/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level8-1/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/checkpoints/step_745627.pt",
+        "symlink_target": "step_745627.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-level8-1/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/checkpoints/best.pt",
+        "bytes": 270759939
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level8-1/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "4a13b1e41348573d2f7ec4377259be3ac6688b26d712085554be96769433b9b5"
+        },
+        {
+          "path": "outputs/runs/spec-level8-1/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "a546d54e5ace436851513c0fe2466f8721c7a0db5d1d93edea5c6ea2ef78fa4a"
+        },
+        {
+          "path": "outputs/runs/spec-level8-1/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "ebe91ddff581ad0f32c34686c3a128ad006ac841f0b53c8561989447e21bcc31"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level8-1/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-1/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "2b682d18b1a028a2f23be7d8f2f48472c4be551ea49db02f8933d81ae32a5cc8"
+      }
+    },
+    {
+      "run": "spec-level8-3",
+      "exports": [
+        {
+          "bundle": "muzero_mario_models_20260905",
+          "exported_file": "/projects/u6oz/atdandrews/MuZero_Mario/exports/muzero_mario_models_20260905/checkpoints/Level8-3.pt",
+          "checkpoint_kind": "best.pt",
+          "source_checkpoint": "outputs/runs/spec-level8-3/checkpoints/best.pt"
+        }
+      ],
+      "latest": {
+        "path": "outputs/runs/spec-level8-3/checkpoints/latest.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": true,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/checkpoints/step_749866.pt",
+        "symlink_target": "step_749866.pt",
+        "bytes": 270766079
+      },
+      "best": {
+        "path": "outputs/runs/spec-level8-3/checkpoints/best.pt",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/checkpoints/best.pt",
+        "bytes": 270758147
+      },
+      "configuration": [
+        {
+          "path": "outputs/runs/spec-level8-3/.hydra/config.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/.hydra/config.yaml",
+          "bytes": 3160,
+          "sha256": "207fbd5f140543eb709369f7b97a90bee9fd5fe333d5dc159452cfeb82f27e35"
+        },
+        {
+          "path": "outputs/runs/spec-level8-3/.hydra/overrides.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/.hydra/overrides.yaml",
+          "bytes": 560,
+          "sha256": "d615e47e8ee1d012931f92a021ad38c1248a55c383dfd608b9453dd900c84ea4"
+        },
+        {
+          "path": "outputs/runs/spec-level8-3/.hydra/hydra.yaml",
+          "exists": true,
+          "readable": true,
+          "is_symlink": false,
+          "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/.hydra/hydra.yaml",
+          "bytes": 4561,
+          "sha256": "432b2a53e8f34fbd1979cdc73e18b3b1df18f5ff91152fde5ebc2acda1b24798"
+        }
+      ],
+      "completion_marker": {
+        "path": "outputs/runs/spec-level8-3/TRAINING_COMPLETE",
+        "exists": true,
+        "readable": true,
+        "is_symlink": false,
+        "resolved_path": "/lus/lfs1aip2/projects/u6oz/atdandrews/MuZero_Mario/outputs/runs/spec-level8-3/TRAINING_COMPLETE",
+        "bytes": 77,
+        "sha256": "1b10f3de286a34e53e010ab24146401556f10c0dafe9e3bd9c7957a01995fe91"
+      }
+    }
+  ]
+}
